@@ -89,12 +89,38 @@ namespace NetTopologySuite.Robust.Orientation
         private const double Eps = 2.220446049250313e-16; // 2^-52
 
         /// <summary>
-        /// Robust orientation sign with Shewchuk Stage A filter.  Returns
-        /// <see cref="OrientSignRobust.Uncertain"/> when the naive cross-
-        /// product is too close to zero relative to the operand
-        /// magnitudes for its sign to be trusted under IEEE 754 binary64
-        /// rounding.  In every other case agrees with <see cref="Sign"/>.
+        /// Robust orientation sign with Shewchuk Stage A filter.  Five-valued
+        /// result; in every non-Uncertain case the answer agrees with
+        /// <see cref="Sign"/>.
         /// </summary>
+        /// <remarks>
+        /// <para>Contract on the return value:</para>
+        /// <list type="bullet">
+        /// <item><description><see cref="OrientSignRobust.Pos"/> /
+        /// <see cref="OrientSignRobust.Neg"/> — the naive cross-product sign
+        /// is reliable: |det| strictly exceeds Shewchuk's Stage A forward-
+        /// error bound <c>(3 + 16·eps)·eps · (|t1| + |t2|)</c>.</description></item>
+        /// <item><description><see cref="OrientSignRobust.Zero"/> — the
+        /// naive cross product evaluated to exactly <c>+0</c> in binary64.
+        /// Strictly stronger than "near-zero"; the filter does NOT promote
+        /// near-zero to Zero.</description></item>
+        /// <item><description><see cref="OrientSignRobust.Nan"/> — at least
+        /// one input coordinate was NaN, or an intermediate product
+        /// overflowed to <c>±∞</c> in a way that produced
+        /// <c>∞ − ∞ = NaN</c>.</description></item>
+        /// <item><description><see cref="OrientSignRobust.Uncertain"/> —
+        /// |det| is within the Stage A error bound of zero, so the naive
+        /// sign may be a rounding artefact.  Callers facing Uncertain
+        /// SHOULD either (a) fall back to a higher-precision predicate
+        /// (Shewchuk Stages B/C/D, MPFR, exact rationals), or (b) treat
+        /// Uncertain as collinear with a documented caveat.  Do NOT
+        /// silently coerce Uncertain to <see cref="OrientSignRobust.Zero"/>:
+        /// that defeats the point of the five-valued type and re-introduces
+        /// the sign-flip mode Stage A exists to prevent.</description></item>
+        /// </list>
+        /// <para>Transliterates <c>b64_orient_sign_filtered</c> from the
+        /// Coq companion file <c>theories-flocq/Orientation_b64.v</c>.</para>
+        /// </remarks>
         public static OrientSignRobust SignFiltered(BPoint p0, BPoint p1, BPoint q)
         {
             double t1 = (p1.X - p0.X) * (q.Y  - p0.Y);
