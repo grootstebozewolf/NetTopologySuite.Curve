@@ -147,5 +147,81 @@ namespace NetTopologySuite.Test.Robust.Orientation
             double v = RobustOrientation.Orient2d(P(0, 0), P(1, 0), P(2, 0));
             Assert.That(v, Is.EqualTo(0.0));
         }
+
+        // ---------------------------------------------------------------
+        // SignFiltered (Shewchuk Stage A).
+        // ---------------------------------------------------------------
+
+        [Test]
+        public void SignFiltered_CCWTriangle_IsPos()
+        {
+            var s = RobustOrientation.SignFiltered(P(0, 0), P(1, 0), P(0, 1));
+            Assert.That(s, Is.EqualTo(OrientSignRobust.Pos));
+        }
+
+        [Test]
+        public void SignFiltered_CWTriangle_IsNeg()
+        {
+            var s = RobustOrientation.SignFiltered(P(0, 0), P(0, 1), P(1, 0));
+            Assert.That(s, Is.EqualTo(OrientSignRobust.Neg));
+        }
+
+        [Test]
+        public void SignFiltered_ExactlyCollinear_IsZero()
+        {
+            var s = RobustOrientation.SignFiltered(P(0, 0), P(1, 0), P(2, 0));
+            Assert.That(s, Is.EqualTo(OrientSignRobust.Zero));
+        }
+
+        [Test]
+        public void SignFiltered_AnyNaN_IsNan(
+            [Values(0, 1, 2)] int nanPosition,
+            [Values(0, 1)]    int nanCoord)
+        {
+            var pts = new[] { P(0, 0), P(1, 0), P(0, 1) };
+            double nx = nanCoord == 0 ? double.NaN : pts[nanPosition].X;
+            double ny = nanCoord == 1 ? double.NaN : pts[nanPosition].Y;
+            pts[nanPosition] = new BPoint(nx, ny);
+
+            var s = RobustOrientation.SignFiltered(pts[0], pts[1], pts[2]);
+            Assert.That(s, Is.EqualTo(OrientSignRobust.Nan));
+        }
+
+        // -----------------------------------------------------------------
+        // Adversarial: a triangle constructed to land just inside the
+        // Stage A error bound so the filter must say Uncertain rather
+        // than flip a sign.  Constructed by deviating one coordinate of
+        // a collinear triangle by exactly 1 ULP at 1.0 (= 2^-52), which
+        // gives a `det` of magnitude 2^-52 against a `detsum` of 2.  The
+        // Stage A bound is `(3 + 16*eps)*eps * detsum` ~ 1.33e-15, larger
+        // than |det| = 2.22e-16 -- so the filter must say Uncertain.
+        // -----------------------------------------------------------------
+        [Test]
+        public void SignFiltered_BelowFilterThreshold_IsUncertain()
+        {
+            var p0 = P(0.0, 0.0);
+            var p1 = P(1.0, 1.0);
+            // 1 + 2^-52 = next double up from 1.0.
+            double oneUp = System.Math.BitIncrement(1.0);
+            var q  = P(1.0, oneUp);
+
+            var s = RobustOrientation.SignFiltered(p0, p1, q);
+            Assert.That(s, Is.EqualTo(OrientSignRobust.Uncertain));
+        }
+
+        // Naive Sign and SignFiltered must agree on every non-Uncertain,
+        // non-NaN case that's well outside the filter threshold.  Pinning
+        // here so a future refactor that diverges them flips this test.
+        [Test]
+        public void SignFiltered_AgreesWithSign_FarFromFilter()
+        {
+            // Unit triangle, comfortably outside any rounding regime.
+            var p0 = P(0, 0);
+            var p1 = P(1, 0);
+            var q  = P(0, 1);
+            var naive    = RobustOrientation.Sign(p0, p1, q);
+            var filtered = RobustOrientation.SignFiltered(p0, p1, q);
+            Assert.That((int)filtered, Is.EqualTo((int)naive));
+        }
     }
 }
