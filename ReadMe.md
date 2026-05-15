@@ -2,7 +2,7 @@
 
 Fork of [NetTopologySuite/NetTopologySuite.Curve](https://github.com/NetTopologySuite/NetTopologySuite.Curve) — adds support for circular / curved geometries to NTS, plus an in-progress *formally-specified robust geometry layer* under `NetTopologySuite.Robust.*` that pairs each algorithm with a Coq specification and a reference implementation extracted from the proofs.
 
-> Phase 0 — a greedy perpendicular-distance polyline simplifier with a Coq specification — is essentially done.  It lives on [`phase0/verified-perp-simplifier`](https://github.com/grootstebozewolf/NetTopologySuite.Curve/tree/phase0/verified-perp-simplifier), with 262 tests passing bit-exact against the Coq-extracted reference.  [Phase 0 status](#phase-0-status) below has the details.
+> Phase 0 has two slices done.  The greedy perpendicular-distance simplifier lives on [`phase0/verified-perp-simplifier`](https://github.com/grootstebozewolf/NetTopologySuite.Curve/tree/phase0/verified-perp-simplifier); the robust orientation predicate (Shewchuk Stage A filter — returns `Uncertain` rather than flip sign near collinear) lives on [`phase0/robust-orientation`](https://github.com/grootstebozewolf/NetTopologySuite.Curve/tree/phase0/robust-orientation).  Both pass 396 tests bit-exact against the Coq-extracted reference.  [Phase 0 status](#phase-0-status) has the details.
 
 ---
 
@@ -35,35 +35,40 @@ The C# follows the Coq specification and matches it bit-for-bit on every shipped
 
 ## Phase 0 status
 
-The first algorithm slice — the greedy perpendicular-distance polyline simplifier — is feature-complete and shipped on a branch.
+Two slices have landed.  Both are on branches; both pass bit-exact against the Coq-extracted RocqRefRunner on Apple Silicon (.NET 10 + OCaml 5.4.1).
+
+### Slice 1: greedy perpendicular-distance polyline simplifier
 
 | Item | Where |
 |---|---|
 | Active branch | [`phase0/verified-perp-simplifier`](https://github.com/grootstebozewolf/NetTopologySuite.Curve/tree/phase0/verified-perp-simplifier) |
 | Production code | [`src/NetTopologySuite.Curved/Robust/Simplify/`](https://github.com/grootstebozewolf/NetTopologySuite.Curve/tree/phase0/verified-perp-simplifier/src/NetTopologySuite.Curved/Robust/Simplify) |
-| Tests | [`test/NetTopologySuite.Curved.Test/Robust/Simplify/`](https://github.com/grootstebozewolf/NetTopologySuite.Curve/tree/phase0/verified-perp-simplifier/test/NetTopologySuite.Curved.Test/Robust/Simplify) |
 | Coq spec | [`theories-flocq/Validate_binary64.v`](https://github.com/grootstebozewolf/NetTopologySuite.Proofs/blob/main/theories-flocq/Validate_binary64.v) |
-| RocqRefRunner build | [`oracle/`](https://github.com/grootstebozewolf/NetTopologySuite.Proofs/tree/main/oracle) in the proofs repo |
 
-### What landed
+- `GreedyPerpSimplifier` — idiomatic iterative implementation, single sweep with two indices.  Coq Fixpoint clause documented inline.
+- `BPoint` / `B64Ops` — record + binary64 arithmetic helpers.  NaN-safe `Le` matches `b64_le` (false on NaN).
+- 14 unit tests mirroring the Qed-closed structural lemmas (`_nil`, `_singleton`, `_two_points`, `_nonempty`, `_length_le`, `_preserves_head`, `_in_head`, plus collinear-drop and NaN-safety).
+- 248 RocqRef differential cases across 5 deterministic fixtures + 150 randomised polylines + 93 adversarial (tight clusters, repeated points, near-collinear, NaN, huge magnitudes).  **262 / 262** bit-exact.
 
-- **`GreedyPerpSimplifier`** — idiomatic iterative implementation, single sweep with two indices.  The Coq Fixpoint clause it transliterates is documented inline.
-- **`BPoint` / `B64Ops`** — record + binary64 arithmetic helpers.  NaN-safe `Le` matches the Coq `b64_le` semantics (`false` on either operand NaN).
-- **14 unit tests** — one per Qed-closed structural lemma in the Coq corpus (`_nil`, `_singleton`, `_two_points`, `_nonempty`, `_length_le`, `_preserves_head`, `_in_head`, plus collinear-drop and NaN-safety expectations).
-- **248 RocqRef differential cases** across five families:
-  - 5 deterministic fixtures.
-  - 150 randomised polylines (uniform in `[-5, 5]^2`).
-  - 24 tight-cluster cases (subnormal scales).
-  - 12 repeated-point cases.
-  - 45 near-collinear cases at machine-epsilon `dy`.
-  - 3 NaN-position cases.
-  - 9 huge-magnitude cases (up to `1e300`).
+The R-bridge soundness theorem (`greedy_simplify_binary64_sound` — threading Flocq's no-overflow preconditions through the Fixpoint) is not yet proven and not stubbed with `Admitted`.
 
-All 262 tests pass bit-exact on the dev box (Apple Silicon, OCaml 5.4.1, .NET 10).
+### Slice 2: robust orientation predicate (Shewchuk Stage A)
 
-### Soundness bridge (not yet)
+| Item | Where |
+|---|---|
+| Active branch | [`phase0/robust-orientation`](https://github.com/grootstebozewolf/NetTopologySuite.Curve/tree/phase0/robust-orientation) |
+| Production code | [`src/NetTopologySuite.Curved/Robust/Orientation/`](https://github.com/grootstebozewolf/NetTopologySuite.Curve/tree/phase0/robust-orientation/src/NetTopologySuite.Curved/Robust/Orientation) |
+| Coq spec | [`theories-flocq/Orientation_b64.v`](https://github.com/grootstebozewolf/NetTopologySuite.Proofs/blob/main/theories-flocq/Orientation_b64.v) |
 
-The R-bridge soundness theorem (`greedy_simplify_binary64_sound` — threading Flocq's no-overflow preconditions through the Fixpoint) is not yet proven.  The `PROOF STATUS` block at the top of `Validate_binary64.v` says so explicitly.  It is also not stubbed with `Admitted`; the corpus holds the "no Admitted, no Axiom, no Parameter" invariant uniformly.
+- `RobustOrientation.Orient2d` — naive cross-product signed twice-area.
+- `RobustOrientation.Sign` — 4-valued naive sign (`OrientSign` enum).
+- `RobustOrientation.SignFiltered` — 5-valued Shewchuk Stage A sign (`OrientSignRobust` enum: `Pos`/`Neg`/`Zero`/`Nan`/`Uncertain`).  Returns `Uncertain` when `|det|` is within the forward-error bound `(3 + 16·eps)·eps · (|t1| + |t2|)` of zero, rather than risk a silent sign flip.
+- Qed-closed structural lemmas on the Coq side: decidability, totality, distinctness across both 4-valued and 5-valued sign types.
+- RocqRef differential against both `ORIENT` and `ORIENT_FILTERED` modes.  **396 / 396** bit-exact (262 simplifier + 134 orientation including filtered-sign agreement).
+
+Shewchuk's deeper stages (B / C / D — expansion arithmetic that resolves `Uncertain` into a definite Pos/Neg/Zero) are deferred.  Callers facing `Uncertain` today either fall back to a higher-precision predicate or treat the triangle as collinear with a documented caveat.
+
+The arithmetic identities that hold over ℝ (antisymmetry, cyclic permutation, translation invariance) are not yet claimed in binary64 — they need the same no-overflow precondition machinery deferred for the simplifier R-bridge.
 
 ---
 
@@ -98,7 +103,6 @@ dotnet test test/NetTopologySuite.Curved.Test/ \
 
 ## What's next
 
-Phase 1 is where the real questions are: robust 2D orientation predicates (Shewchuk-style adaptive precision) and snap rounding.  Past that:
-
-- Robust segment-segment intersection, same Coq-spec + RocqRef pattern.
-- CI integration — a workflow that builds the RocqRefRunner in a container and runs the differential suite as a PR gate.
+- **Shewchuk Stages B / C / D** — expansion-arithmetic refinement that resolves `OrientSignRobust.Uncertain` into a definite Pos/Neg/Zero.  Same Coq-spec + RocqRef pattern.
+- **Robust segment-segment intersection** — Phase 1 of the chokepoint roadmap.
+- **CI integration** — a workflow that builds the RocqRefRunner in a container and runs the differential suite as a PR gate.
