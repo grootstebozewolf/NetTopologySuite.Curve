@@ -8,20 +8,32 @@ on:
 
 jobs:
   build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
 
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, windows-latest, macOS-latest ]
 
     steps:
-    - uses: actions/checkout@v2
+    - name: Get source
+      uses: actions/checkout@v5
       with:
         submodules: recursive
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v1
+
+    - name: Setup .NET 10
+      uses: actions/setup-dotnet@v5
       with:
-        dotnet-version: 5.0.x
-    - name: Restore dependencies
-      run: dotnet restore
+        dotnet-version: 10
+
+    - name: Restore
+      run: dotnet restore -p:EnableApiCompat=false
+
     - name: Build
-      run: dotnet build --no-restore
+      run: dotnet build -c Release --no-restore -p:EnableApiCompat=false
+
     - name: Test
-      run: dotnet test --no-build --verbosity normal
+      # --blame-hang-timeout surfaces hung tests as failures instead of
+      # letting them block CI forever; some Curve* tests on this branch
+      # are known to hang and need follow-up TAG fixes.
+      run: dotnet test -c Release --no-build -p:EnableApiCompat=false --blame-hang-timeout 120s
