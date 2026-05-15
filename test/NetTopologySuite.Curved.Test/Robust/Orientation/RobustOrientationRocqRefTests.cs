@@ -116,6 +116,38 @@ namespace NetTopologySuite.Test.Robust.Orientation
         }
 
         // -----------------------------------------------------------------
+        // Adversarial: huge magnitudes that push intermediate products
+        // close to (or past) binary64 overflow.  Whatever the implementation
+        // does -- return a real sign, propagate to Nan via inf-minus-inf,
+        // or fall through to Uncertain because the filter bound itself
+        // overflowed -- C# and RocqRef must agree on it.
+        // -----------------------------------------------------------------
+        [Test]
+        public void Adversarial_HugeMagnitude_BitEqual(
+            [Values(1e100, 1e150, 1e200, 1e250, 1e300)] double mag)
+        {
+            var p0 = new BPoint(-mag, -mag);
+            var p1 = new BPoint( mag, -mag);
+            var q  = new BPoint(  0,   mag);
+            AssertMatches(p0, p1, q);
+        }
+
+        // Mixed scales: large outer coords, tiny perturbation -- a regime
+        // where Shewchuk's filter typically declines and Uncertain is the
+        // right answer.  C# and RocqRef must agree on which inputs land
+        // in Pos / Neg / Uncertain.
+        [Test]
+        public void Adversarial_MixedScale_BitEqual(
+            [Values(1e6, 1e10, 1e15)]         double mag,
+            [Values(1e-30, 1e-15, 1e-9, 1.0)] double dy)
+        {
+            var p0 = new BPoint(0,    0);
+            var p1 = new BPoint(mag,  0);
+            var q  = new BPoint(mag, dy);
+            AssertMatches(p0, p1, q);
+        }
+
+        // -----------------------------------------------------------------
         // Helpers.
         // -----------------------------------------------------------------
 
