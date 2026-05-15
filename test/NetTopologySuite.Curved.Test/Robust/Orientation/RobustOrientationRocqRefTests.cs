@@ -148,6 +148,78 @@ namespace NetTopologySuite.Test.Robust.Orientation
         }
 
         // -----------------------------------------------------------------
+        // Adversarial: integer-valued coordinates in the regime covered by
+        // the Coq theorem `b64_orient_sign_filtered_sound_small_int` in
+        // `theories-flocq/Orient_b64_exact.v` -- |coord| <= 2^25,
+        // integer-valued.  In this regime every operation in `b64_orient2d`
+        // is bit-exact: every intermediate stays within binary64's 53-bit
+        // integer-exactness window, so the rounded value equals the exact
+        // mathematical cross product on the nose, and the Stage A
+        // filter's sign decision is sound relative to the mathematical
+        // `cross_R_BP`.  These tests exercise edge cases through the
+        // differential harness; a divergence between C# and RocqRef on
+        // inputs the Coq proof shows are fully determined would flag an
+        // implementation drift.
+        //
+        // The `det=1 detsum=2^51` cases reproduce the near-boundary
+        // construction from `docs/soundness-strategy.md`: with operands
+        // P0=(-2^25,-2^25), P1=(0,1), Q=(-1,0), the products t1=2^50 and
+        // t2=2^50-1 give det=1 over a detsum near binary64's
+        // integer-exactness ceiling -- the tightest non-zero outcome the
+        // regime allows.
+        // -----------------------------------------------------------------
+        [TestCase(-33554432.0, -33554432.0,  33554432.0,  33554432.0,         0.0,  33554432.0,
+            TestName = "IntegerRegime: full-range CCW")]
+        [TestCase(-33554432.0, -33554432.0,  33554432.0,  33554432.0,  33554432.0,         0.0,
+            TestName = "IntegerRegime: full-range CW")]
+        [TestCase(-33554432.0, -33554432.0,  33554432.0,  33554432.0,         0.0,         0.0,
+            TestName = "IntegerRegime: full-range collinear")]
+        [TestCase(-33554432.0, -33554432.0,         0.0,         1.0,        -1.0,         0.0,
+            TestName = "IntegerRegime: det=1, detsum near 2^51")]
+        [TestCase(-33554432.0, -33554432.0,         0.0,        -1.0,        -1.0,         0.0,
+            TestName = "IntegerRegime: det=-1, detsum near 2^51")]
+        [TestCase( 33554432.0,  33554432.0,  33554432.0,  33554432.0,         7.0,        11.0,
+            TestName = "IntegerRegime: degenerate base at boundary")]
+        [TestCase(         0.0,         0.0,  33554432.0,  33554432.0,         0.0,         0.0,
+            TestName = "IntegerRegime: Q=P0 at boundary")]
+        [TestCase(         0.0,         0.0,  33554432.0,  33554432.0,  33554432.0,  33554432.0,
+            TestName = "IntegerRegime: Q=P1 at boundary")]
+        public void Adversarial_IntegerRegime_BoundaryCorners_BitEqual(
+            double x0, double y0, double x1, double y1, double x2, double y2)
+        {
+            AssertMatches(new BPoint(x0, y0), new BPoint(x1, y1), new BPoint(x2, y2));
+        }
+
+        // Three exactly-collinear integer points across six scales.  Det
+        // is mathematically zero; `Sign` and `SignFiltered` should both
+        // return Zero, and the binary64 area should be bit-zero.  At
+        // scale = 2^24, `2 * scale = 2^25` still lies in the regime.
+        [Test]
+        public void Adversarial_IntegerRegime_CollinearAtScale_BitEqual(
+            [Values(1, 7, 100, 1000, 1000000, 16777216)] int scale)
+        {
+            AssertMatches(
+                new BPoint(0, 0),
+                new BPoint(scale, scale),
+                new BPoint(2 * scale, 2 * scale));
+        }
+
+        // Random integer triangles uniformly in [-2^25, 2^25]^2.  Every
+        // sample is in the proved-sound regime, so the C# implementation
+        // must bit-match the Coq-extracted reference on all 80 samples.
+        [Test]
+        public void Adversarial_IntegerRegime_RandomInteger_BitEqual(
+            [Random(0, int.MaxValue, 80)] int seed)
+        {
+            var rng = new Random(seed);
+            const int K = 33554432; // 2^25
+            AssertMatches(
+                new BPoint(rng.Next(-K, K + 1), rng.Next(-K, K + 1)),
+                new BPoint(rng.Next(-K, K + 1), rng.Next(-K, K + 1)),
+                new BPoint(rng.Next(-K, K + 1), rng.Next(-K, K + 1)));
+        }
+
+        // -----------------------------------------------------------------
         // Helpers.
         // -----------------------------------------------------------------
 
