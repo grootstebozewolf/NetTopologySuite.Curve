@@ -161,6 +161,33 @@ namespace NetTopologySuite.Test.Robust.Intersect
             var csSign  = RobustLineIntersector.SignFiltered(p0, p1, q0, q1);
             Assert.That(csSign, Is.EqualTo(refSign),
                 "intersect sign mismatch: C#=" + csSign + " RocqRef=" + refSign);
+
+            // Intersection point bit-equality.  Coq's b64_intersect_point and
+            // C#'s IntersectionPoint round identically; any divergence flags a
+            // port mismatch.  Both return null/None for non-Point results.
+            var (refHasPoint, refX, refY) = RunRocqRefIntersectPointFiltered(p0, p1, q0, q1);
+            var csPoint = RobustLineIntersector.IntersectionPoint(p0, p1, q0, q1);
+
+            if (refHasPoint)
+            {
+                Assert.That(csPoint, Is.Not.Null,
+                    "intersection point: C#=null while RocqRef returned POINT");
+                long csXBits  = BitConverter.DoubleToInt64Bits(csPoint!.Value.X);
+                long refXBits = BitConverter.DoubleToInt64Bits(refX);
+                long csYBits  = BitConverter.DoubleToInt64Bits(csPoint.Value.Y);
+                long refYBits = BitConverter.DoubleToInt64Bits(refY);
+                Assert.That(csXBits, Is.EqualTo(refXBits),
+                    "intersection X bits: C#=0x" + csXBits.ToString("X16") +
+                    " RocqRef=0x" + refXBits.ToString("X16"));
+                Assert.That(csYBits, Is.EqualTo(refYBits),
+                    "intersection Y bits: C#=0x" + csYBits.ToString("X16") +
+                    " RocqRef=0x" + refYBits.ToString("X16"));
+            }
+            else
+            {
+                Assert.That(csPoint, Is.Null,
+                    "intersection point: C# returned a point while RocqRef returned NONE");
+            }
         }
 
         private IntersectSign RunRocqRefIntersectFiltered(
@@ -218,12 +245,111 @@ namespace NetTopologySuite.Test.Robust.Intersect
             }
         }
 
+        private (bool hasPoint, double x, double y) RunRocqRefIntersectPointFiltered(
+            BPoint p0, BPoint p1, BPoint q0, BPoint q1)
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = _rocqRefPath,
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            };
+            using (var proc = Process.Start(psi))
+            {
+                if (proc == null)
+                {
+                    Assert.Fail("RocqRefRunner process failed to start: " + _rocqRefPath);
+                    return (false, double.NaN, double.NaN);
+                }
+
+                using (var w = proc.StandardInput)
+                {
+                    w.WriteLine("INTERSECT_POINT_FILTERED");
+                    w.WriteLine(Fmt(p0.X) + " " + Fmt(p0.Y));
+                    w.WriteLine(Fmt(p1.X) + " " + Fmt(p1.Y));
+                    w.WriteLine(Fmt(q0.X) + " " + Fmt(q0.Y));
+                    w.WriteLine(Fmt(q1.X) + " " + Fmt(q1.Y));
+                }
+
+                string line = proc.StandardOutput.ReadLine();
+                proc.WaitForExit();
+                if (proc.ExitCode != 0)
+                {
+                    string err = proc.StandardError.ReadToEnd();
+                    Assert.Fail("RocqRefRunner exit code " + proc.ExitCode + ": " + err);
+                }
+                if (line == null)
+                {
+                    Assert.Fail("RocqRefRunner returned no output (intersect point)");
+                }
+
+                var trimmed = line.Trim();
+                if (trimmed == "NONE")
+                {
+                    return (false, double.NaN, double.NaN);
+                }
+                var parts = trimmed.Split(' ');
+                if (parts.Length != 3 || parts[0] != "POINT")
+                {
+                    Assert.Fail("malformed intersect-point line: '" + trimmed + "'");
+                }
+                double x = ParseOcamlFloat(parts[1]);
+                double y = ParseOcamlFloat(parts[2]);
+                return (true, x, y);
+            }
+        }
+
         private static string Fmt(double x)
         {
             if (double.IsNaN(x))                return "nan";
             if (double.IsPositiveInfinity(x))   return "infinity";
             if (double.IsNegativeInfinity(x))   return "neg_infinity";
             return x.ToString("R", CultureInfo.InvariantCulture);
+        }
+
+        // Parse OCaml's "%h" hex-float output back into a double.  Mirrors
+        // the helper in RobustOrientationRocqRefTests; duplicated here to
+        // keep this fixture self-contained.
+        private static double ParseOcamlFloat(string s)
+        {
+            if (s == "nan" || s == "Nan" || s == "NaN") return double.NaN;
+            if (s == "inf" || s == "infinity" || s == "Infinity") return double.PositiveInfinity;
+            if (s == "-inf" || s == "neg_infinity" || s == "-Infinity") return double.NegativeInfinity;
+
+            int i = 0;
+            bool neg = false;
+            if (s[0] == '-') { neg = true; i = 1; }
+            else if (s[0] == '+') { i = 1; }
+
+            if (i + 1 >= s.Length || s[i] != '0' || s[i + 1] != 'x')
+            {
+                return double.Parse(s, CultureInfo.InvariantCulture);
+            }
+            i += 2;
+            int pIdx = s.IndexOf('p', i);
+            if (pIdx < 0)
+            {
+                throw new FormatException("Bad hex float: " + s);
+            }
+            string mantissa = s.Substring(i, pIdx - i);
+            int exponent = int.Parse(s.Substring(pIdx + 1), CultureInfo.InvariantCulture);
+            int dotIdx = mantissa.IndexOf('.');
+            string ipart = dotIdx >= 0 ? mantissa.Substring(0, dotIdx) : mantissa;
+            string fpart = dotIdx >= 0 ? mantissa.Substring(dotIdx + 1) : "";
+            double m = 0.0;
+            if (ipart.Length > 0)
+            {
+                m = (double)Convert.ToInt64(ipart, 16);
+            }
+            if (fpart.Length > 0)
+            {
+                long fval = Convert.ToInt64(fpart, 16);
+                m += fval / Math.Pow(16, fpart.Length);
+            }
+            m *= Math.Pow(2, exponent);
+            return neg ? -m : m;
         }
     }
 }
