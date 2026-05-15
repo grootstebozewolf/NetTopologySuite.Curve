@@ -16,7 +16,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\NetTopologySuite.Curved\NetTopologySuite.Curve.csproj" />
+    <ProjectReference Include="..\..\src\NetTopologySuite.Curve\NetTopologySuite.Curve.csproj" />
+    <ProjectReference Include="..\..\src\NetTopologySuite.Curve.Analyzers\NetTopologySuite.Curve.Analyzers.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>
