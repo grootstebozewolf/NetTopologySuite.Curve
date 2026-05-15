@@ -136,5 +136,47 @@ namespace NetTopologySuite.Robust.Intersect
             double dy = p1.Y - p0.Y;
             return new BPoint(p0.X + s * dx, p0.Y + s * dy);
         }
+
+        /// <summary>
+        /// If the two segments share an endpoint (one endpoint of one
+        /// segment is coordinate-equal to one endpoint of the other),
+        /// return that endpoint.  Otherwise return <c>null</c>.  Transliterates
+        /// the Coq <c>b64_shared_endpoint_witness</c> in
+        /// <c>theories-flocq/Intersect_b64.v</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>This is the recover-a-concrete-witness companion to the
+        /// predicate's <see cref="IntersectSign.Collinear"/> branch:
+        /// when the predicate reports Collinear, the actual geometric
+        /// configuration may be a shared endpoint, a T-junction, a full
+        /// collinear overlap, or collinear-disjoint.  The predicate alone
+        /// can't disambiguate; this method probes the four endpoint
+        /// pairings and returns the coincident endpoint when one exists.</para>
+        ///
+        /// <para>The Coq soundness theorem
+        /// <c>b64_shared_endpoint_witness_sound</c> guarantees that the
+        /// returned point lies on both segments (via <c>BP2P</c> lift)
+        /// when all eight input coordinates are finite.  The pairings are
+        /// tested in fixed order (P0=Q0, P0=Q1, P1=Q0, P1=Q1); when more
+        /// than one coincidence holds (e.g. both segments are the same
+        /// point), the first match wins.</para>
+        ///
+        /// <para>NaN coordinates compare unequal to themselves in IEEE 754,
+        /// so any NaN input falls through to <c>null</c> -- callers
+        /// should still treat NaN inputs as invalid and not rely on the
+        /// shared-endpoint contract for them.</para>
+        /// </remarks>
+        public static BPoint? TryGetSharedEndpoint(
+            BPoint p0, BPoint p1, BPoint q0, BPoint q1)
+        {
+            if (BPointEq(p0, q0)) return p0;
+            if (BPointEq(p0, q1)) return p0;
+            if (BPointEq(p1, q0)) return p1;
+            if (BPointEq(p1, q1)) return p1;
+            return null;
+        }
+
+        private static bool BPointEq(BPoint a, BPoint b) =>
+            a.X == b.X && a.Y == b.Y;
     }
 }
