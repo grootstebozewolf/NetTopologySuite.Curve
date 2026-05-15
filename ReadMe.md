@@ -1,8 +1,8 @@
 # NetTopologySuite.Curve
 
-Fork of [NetTopologySuite/NetTopologySuite.Curve](https://github.com/NetTopologySuite/NetTopologySuite.Curve) — adds support for circular / curved geometries to NTS, **plus** an in-progress *formally-specified robust geometry layer* under `NetTopologySuite.Robust.*` that pairs each algorithm with a Coq specification and a differential testing oracle.
+Fork of [NetTopologySuite/NetTopologySuite.Curve](https://github.com/NetTopologySuite/NetTopologySuite.Curve) — adds support for circular / curved geometries to NTS, plus an in-progress *formally-specified robust geometry layer* under `NetTopologySuite.Robust.*` that pairs each algorithm with a Coq specification and a reference implementation extracted from the proofs.
 
-> **Reviewer's quick read.** Phase 0 (the greedy perpendicular-distance polyline simplifier) is finished and lives on the branch [`phase0/verified-perp-simplifier`](https://github.com/grootstebozewolf/NetTopologySuite.Curve/tree/phase0/verified-perp-simplifier). 262/262 tests pass bit-exact against the Coq-extracted reference binary. Jump to [Phase 0 status](#phase-0-status) for the details.
+> Phase 0 — a greedy perpendicular-distance polyline simplifier with a Coq specification — is essentially done.  It lives on [`phase0/verified-perp-simplifier`](https://github.com/grootstebozewolf/NetTopologySuite.Curve/tree/phase0/verified-perp-simplifier), with 262 tests passing bit-exact against the Coq-extracted reference.  [Phase 0 status](#phase-0-status) below has the details.
 
 ---
 
@@ -26,10 +26,10 @@ The work splits across two repositories:
 
 | Repo | Role |
 |---|---|
-| [NetTopologySuite.Proofs](https://github.com/grootstebozewolf/NetTopologySuite.Proofs) | Coq specifications, structural lemmas, and the extracted **RocqRefRunner** binary used as a differential testing oracle. |
-| **NetTopologySuite.Curve** (this repo) | Production C# implementations under `NetTopologySuite.Robust.*`, unit tests mirroring the Coq lemmas, and the RocqRef differential harness. |
+| [NetTopologySuite.Proofs](https://github.com/grootstebozewolf/NetTopologySuite.Proofs) | Coq specifications, structural lemmas, and the extracted **RocqRefRunner** binary used for differential testing. |
+| **NetTopologySuite.Curve** (this repo) | C# implementations under `NetTopologySuite.Robust.*`, unit tests mirroring the Coq lemmas, and the RocqRef differential harness. |
 
-**Honest framing.** The C# implementations are *Coq-specified* and *structurally verified* (head preservation, length monotonicity, head membership, NaN safety, etc.) and *bit-exact* against the Coq-extracted reference on every test case we ship.  Full semantic soundness against the real-number model is future work and is **not** claimed.
+The C# follows the Coq specification and matches it bit-for-bit on every shipped test case.  Structural properties (head preservation, length monotonicity, head membership, NaN safety) are proven Qed-closed in the Coq corpus and mirrored as unit tests on the C# side.  Full semantic soundness against the real-number model is future work, not claimed yet.
 
 ---
 
@@ -61,9 +61,9 @@ The first algorithm slice — the greedy perpendicular-distance polyline simplif
 
 All 262 tests pass bit-exact on the dev box (Apple Silicon, OCaml 5.4.1, .NET 10).
 
-### What is deliberately deferred
+### Soundness bridge (not yet)
 
-The headline soundness theorem `greedy_simplify_binary64_sound` (R-bridge with no-overflow precondition threading) is not yet claimed — see the `PROOF STATUS` block at the top of `Validate_binary64.v` in the proofs repo.  It is explicitly *not* stubbed with `Admitted`; the file holds the corpus-wide "no Admitted, no Axiom, no Parameter" invariant.
+The R-bridge soundness theorem (`greedy_simplify_binary64_sound` — threading Flocq's no-overflow preconditions through the Fixpoint) is not yet proven.  The `PROOF STATUS` block at the top of `Validate_binary64.v` says so explicitly.  It is also not stubbed with `Admitted`; the corpus holds the "no Admitted, no Axiom, no Parameter" invariant uniformly.
 
 ---
 
@@ -79,7 +79,7 @@ dotnet test test/NetTopologySuite.Curved.Test/ \
 # 14/14 pass; 248 RocqRef cases marked Skipped.
 ```
 
-To activate the full RocqRef differential suite, build the oracle binary from the proofs repo and point `ROCQ_REF_BIN` at it:
+To activate the full RocqRef differential suite, build the RocqRefRunner from the proofs repo and point `ROCQ_REF_BIN` at it:
 
 ```bash
 git clone https://github.com/grootstebozewolf/NetTopologySuite.Proofs.git
@@ -96,8 +96,9 @@ dotnet test test/NetTopologySuite.Curved.Test/ \
 
 ---
 
-## Roadmap (not yet started)
+## What's next
 
-- **Robust 2D orientation predicate** — Shewchuk-style adaptive precision, Coq-spec + RocqRef pattern.
-- **Robust segment-segment intersection** — same pattern, with the perpendicular-distance regime already proven structurally as a stepping stone.
-- **CI integration** — workflow that builds the RocqRefRunner in a container and runs the differential suite as a PR gate.
+Phase 1 is where the real questions are: robust 2D orientation predicates (Shewchuk-style adaptive precision) and snap rounding.  Past that:
+
+- Robust segment-segment intersection, same Coq-spec + RocqRef pattern.
+- CI integration — a workflow that builds the RocqRefRunner in a container and runs the differential suite as a PR gate.
