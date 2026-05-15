@@ -82,5 +82,59 @@ namespace NetTopologySuite.Robust.Intersect
         private static bool SameStrictSide(OrientSignRobust s1, OrientSignRobust s2) =>
             (s1 == OrientSignRobust.Pos && s2 == OrientSignRobust.Pos)
             || (s1 == OrientSignRobust.Neg && s2 == OrientSignRobust.Neg);
+
+        /// <summary>
+        /// Rounded intersection point coordinates for two segments that the
+        /// filter classifies as <see cref="IntersectSign.Point"/>.  Returns
+        /// <c>null</c> for any other result.  Transliterates Coq
+        /// <c>b64_intersect_point</c> in
+        /// <c>theories-flocq/Intersect_b64.v</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>Formula (Cramer's rule, parameter on segment
+        /// <paramref name="p0"/>-<paramref name="p1"/> -- matches NTS
+        /// upstream's <c>RobustLineIntersector</c> convention):</para>
+        /// <code>
+        ///   s   = orient(Q0, Q1, P0) / (orient(Q0, Q1, P0) - orient(Q0, Q1, P1))
+        ///   X.x = P0.x + s * (P1.x - P0.x)
+        ///   X.y = P0.y + s * (P1.y - P0.y)
+        /// </code>
+        /// <para>Bit-equal against the Coq-extracted reference on every
+        /// test case in <c>RobustLineIntersectorRocqRefTests</c>.  In the
+        /// integer regime the cross-product inputs <c>qp0</c> / <c>qp1</c>
+        /// are exact integers; division and the subsequent multiplication
+        /// + addition introduce binary64 rounding -- the returned
+        /// <see cref="BPoint"/> is the rounded approximation of the true
+        /// rational intersection.  A forward-error soundness theorem
+        /// against the true rational is deferred (comparable in scope to
+        /// Phase 0 Stage D / forward-error analysis).</para>
+        /// </remarks>
+        public static BPoint? IntersectionPoint(
+            BPoint p0, BPoint p1, BPoint q0, BPoint q1)
+        {
+            if (SignFiltered(p0, p1, q0, q1) != IntersectSign.Point)
+            {
+                return null;
+            }
+
+            double qp0 = RobustOrientation.Orient2d(q0, q1, p0);
+            double qp1 = RobustOrientation.Orient2d(q0, q1, p1);
+            double den = qp0 - qp1;
+
+            // den is integer-nonzero in the integer regime (Phase 0
+            // exactness on the orient2d inputs).  In the general regime
+            // it's a rounded value; if it happens to round to zero or
+            // NaN we abort defensively, matching the Coq function's
+            // None branch.
+            if (den == 0.0 || double.IsNaN(den))
+            {
+                return null;
+            }
+
+            double s  = qp0 / den;
+            double dx = p1.X - p0.X;
+            double dy = p1.Y - p0.Y;
+            return new BPoint(p0.X + s * dx, p0.Y + s * dy);
+        }
     }
 }
