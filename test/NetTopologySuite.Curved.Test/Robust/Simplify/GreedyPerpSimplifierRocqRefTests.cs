@@ -241,6 +241,10 @@ namespace NetTopologySuite.Test.Robust.Simplify
                 // Feed input: eps then one "x y" line per point.
                 using (var w = proc.StandardInput)
                 {
+                    // RocqRefRunner now dispatches on a mode line on stdin
+                    // (added when the ORIENT mode was wired up alongside the
+                    // simplifier in the proofs repo).  Prefix every query.
+                    w.WriteLine("SIMPLIFY");
                     w.WriteLine(FormatRoundtrip(eps));
                     foreach (var p in pts)
                     {
