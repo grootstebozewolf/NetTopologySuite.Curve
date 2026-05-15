@@ -68,5 +68,66 @@ namespace NetTopologySuite.Robust.Orientation
             if (v < 0.0) return OrientSign.Neg;
             return OrientSign.Zero;
         }
+
+        // ---------------------------------------------------------------
+        // Shewchuk Stage A filter.
+        // ---------------------------------------------------------------
+        // The naive `Sign` above can flip at near-collinear inputs because
+        // of rounding.  Shewchuk's adaptive orient2d (1997) closes this
+        // with a four-stage refinement; this implementation ships Stage A
+        // only (deeper stages are deferred -- they would refine
+        // `Uncertain` results into a definite Pos/Neg/Zero via expansion
+        // arithmetic).  Transliterates the Coq `b64_orient_sign_filtered`
+        // in `theories-flocq/Orientation_b64.v`.
+
+        // (3 + 16 * eps) * eps, where eps = 2^-52 (spacing at 1.0 in
+        // binary64).  Computed once and stored.  ~6.66e-16 -- the
+        // forward-error coefficient Shewchuk derives in his paper.
+        private static readonly double ErrBoundACoeff =
+            (3.0 + 16.0 * Eps) * Eps;
+
+        private const double Eps = 2.220446049250313e-16; // 2^-52
+
+        /// <summary>
+        /// Robust orientation sign with Shewchuk Stage A filter.  Returns
+        /// <see cref="OrientSignRobust.Uncertain"/> when the naive cross-
+        /// product is too close to zero relative to the operand
+        /// magnitudes for its sign to be trusted under IEEE 754 binary64
+        /// rounding.  In every other case agrees with <see cref="Sign"/>.
+        /// </summary>
+        public static OrientSignRobust SignFiltered(BPoint p0, BPoint p1, BPoint q)
+        {
+            double t1 = (p1.X - p0.X) * (q.Y  - p0.Y);
+            double t2 = (q.X  - p0.X) * (p1.Y - p0.Y);
+            double det = t1 - t2;
+
+            if (double.IsNaN(det))
+            {
+                return OrientSignRobust.Nan;
+            }
+            if (det == 0.0)
+            {
+                return OrientSignRobust.Zero;
+            }
+
+            double detsum = System.Math.Abs(t1) + System.Math.Abs(t2);
+            double errbnd = ErrBoundACoeff * detsum;
+            double absDet = System.Math.Abs(det);
+
+            if (double.IsNaN(errbnd) || double.IsNaN(absDet))
+            {
+                return OrientSignRobust.Nan;
+            }
+
+            if (errbnd < absDet)
+            {
+                // Filter passes; naive sign is reliable.
+                return det > 0.0 ? OrientSignRobust.Pos : OrientSignRobust.Neg;
+            }
+
+            // Filter cannot decide.  Higher-precision refinement (Shewchuk
+            // Stages B / C / D) would resolve it; not implemented yet.
+            return OrientSignRobust.Uncertain;
+        }
     }
 }

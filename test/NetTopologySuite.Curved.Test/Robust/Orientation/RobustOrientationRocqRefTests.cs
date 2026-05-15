@@ -121,18 +121,97 @@ namespace NetTopologySuite.Test.Robust.Orientation
 
         private void AssertMatches(BPoint p0, BPoint p1, BPoint q)
         {
+            // Naive ORIENT mode -- 4-valued sign + signed area.
             var (sign, area) = RunRocqRefOrient(p0, p1, q);
             var csSign = RobustOrientation.Sign(p0, p1, q);
             var csArea = RobustOrientation.Orient2d(p0, p1, q);
 
             Assert.That(csSign, Is.EqualTo(sign),
-                "sign mismatch: C#=" + csSign + " RocqRef=" + sign);
+                "naive sign mismatch: C#=" + csSign + " RocqRef=" + sign);
 
             long csBits = BitConverter.DoubleToInt64Bits(csArea);
             long refBits = BitConverter.DoubleToInt64Bits(area);
             Assert.That(csBits, Is.EqualTo(refBits),
                 "orient2d bits: C#=0x" + csBits.ToString("X16") +
                 " RocqRef=0x" + refBits.ToString("X16"));
+
+            // ORIENT_FILTERED mode -- 5-valued sign + signed area.
+            // The signed-area output should bit-equal the naive mode's
+            // (same underlying b64_orient2d formula); the sign differs
+            // only when the Stage A filter declines.
+            var (signR, areaR) = RunRocqRefOrientFiltered(p0, p1, q);
+            var csSignR = RobustOrientation.SignFiltered(p0, p1, q);
+
+            Assert.That(csSignR, Is.EqualTo(signR),
+                "filtered sign mismatch: C#=" + csSignR + " RocqRef=" + signR);
+
+            long csBitsR = BitConverter.DoubleToInt64Bits(
+                RobustOrientation.Orient2d(p0, p1, q));
+            long refBitsR = BitConverter.DoubleToInt64Bits(areaR);
+            Assert.That(csBitsR, Is.EqualTo(refBitsR),
+                "orient2d bits (filtered mode) differ");
+        }
+
+        private (OrientSignRobust sign, double area) RunRocqRefOrientFiltered(
+            BPoint p0, BPoint p1, BPoint q)
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = _rocqRefPath,
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            };
+            using (var proc = Process.Start(psi))
+            {
+                if (proc == null)
+                {
+                    Assert.Fail("RocqRefRunner failed to start: " + _rocqRefPath);
+                    return (OrientSignRobust.Nan, double.NaN);
+                }
+
+                using (var w = proc.StandardInput)
+                {
+                    w.WriteLine("ORIENT_FILTERED");
+                    w.WriteLine(Fmt(p0.X) + " " + Fmt(p0.Y));
+                    w.WriteLine(Fmt(p1.X) + " " + Fmt(p1.Y));
+                    w.WriteLine(Fmt(q.X)  + " " + Fmt(q.Y));
+                }
+
+                string line = proc.StandardOutput.ReadLine();
+                proc.WaitForExit();
+                if (proc.ExitCode != 0)
+                {
+                    string err = proc.StandardError.ReadToEnd();
+                    Assert.Fail("RocqRefRunner exit " + proc.ExitCode + ": " + err);
+                }
+                if (line == null)
+                {
+                    Assert.Fail("RocqRefRunner returned no output (filtered)");
+                }
+                var parts = line.Trim().Split(' ');
+                if (parts.Length != 2)
+                {
+                    Assert.Fail("malformed filtered orient line: '" + line + "'");
+                }
+
+                OrientSignRobust s;
+                switch (parts[0])
+                {
+                    case "POS":       s = OrientSignRobust.Pos; break;
+                    case "NEG":       s = OrientSignRobust.Neg; break;
+                    case "ZERO":      s = OrientSignRobust.Zero; break;
+                    case "NAN":       s = OrientSignRobust.Nan; break;
+                    case "UNCERTAIN": s = OrientSignRobust.Uncertain; break;
+                    default:
+                        Assert.Fail("Unknown filtered sign token: " + parts[0]);
+                        s = OrientSignRobust.Nan;
+                        break;
+                }
+                double area = ParseOcamlFloat(parts[1]);
+                return (s, area);
+            }
         }
 
         private (OrientSign sign, double area) RunRocqRefOrient(
