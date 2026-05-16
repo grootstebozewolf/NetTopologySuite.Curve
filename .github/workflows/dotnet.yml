@@ -36,4 +36,109 @@ jobs:
       # --blame-hang-timeout surfaces hung tests as failures instead of
       # letting them block CI forever; some Curve* tests on this branch
       # are known to hang and need follow-up TAG fixes.
+      # The RocqRef-categorised tests skip via Assert.Ignore when
+      # ROCQ_REF_BIN is unset (which is the case in this matrix job).
+      # They are exercised in the dedicated `rocqref` job below.
       run: dotnet test -c Release --no-build -p:EnableApiCompat=false --blame-hang-timeout 120s
+
+  rocqref:
+    # Differential tests against the Rocq-extracted oracle binary from
+    # NetTopologySuite.Proofs.  The C# test fixtures live under
+    # test/.../Robust/{Orientation,Intersect,Simplify}/...RocqRefTests.cs
+    # and are categorised [Category("RocqRef")]; they Assert.Ignore unless
+    # the environment variable ROCQ_REF_BIN points at a built oracle_bin.
+    # This job builds that binary inside the pinned Rocq + Flocq Docker
+    # image used by the Proofs CI, then runs the four RocqRef fixtures
+    # against it (SIMPLIFY / ORIENT / ORIENT_FILTERED /
+    # INTERSECT_FILTERED / INTERSECT_POINT_FILTERED).
+    name: RocqRef differential tests (Linux + Rocq container)
+    runs-on: ubuntu-latest
+    container:
+      # Same base image as NetTopologySuite.Proofs/Dockerfile, so the
+      # opam state already has Rocq 9.1.1 + OCaml 4.14.2 flambda.  We
+      # only need to opam-install coq-flocq.4.2.2 on top.  --user root
+      # is required to apt-install .NET 10 and to chown the checkouts
+      # back to the rocq user for the opam-aware build steps.
+      image: rocq/rocq-prover:9.1.1-ocaml-4.14.2-flambda
+      options: --user root
+
+    steps:
+    - name: Install system tooling (curl/git/make for Actions + oracle build)
+      run: |
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          curl wget ca-certificates git make build-essential gpg
+
+    - name: Setup .NET 10
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: 10
+
+    - name: Install Flocq 4.2.2 (rocq user's opam state)
+      # The base image's opam switch is owned by the rocq user.  We
+      # install Flocq under that switch so `eval $(opam env)` resolves
+      # to a consistent toolchain in the build step below.
+      run: su rocq -c 'opam install --confirm-level=unsafe-yes coq-flocq.4.2.2'
+
+    - name: Checkout NetTopologySuite.Curve
+      uses: actions/checkout@v5
+      with:
+        path: curve
+        submodules: recursive
+
+    - name: Checkout NetTopologySuite.Proofs (main)
+      # Pinned to main today.  When the Proofs corpus tags a release
+      # we should pin this to a tag instead so the differential tests
+      # don't break on every Proofs commit.
+      uses: actions/checkout@v5
+      with:
+        repository: grootstebozewolf/NetTopologySuite.Proofs
+        ref: main
+        path: proofs
+
+    - name: Hand checkouts to the rocq user
+      # actions/checkout runs as root, but the Rocq build chain needs
+      # rocq's opam env and write access to the checkout dirs.
+      run: chown -R rocq:rocq curve proofs
+
+    - name: Build Proofs (Flocq corpus) + extract oracle
+      # Mirrors the Proofs Dockerfile's CMD: clean host-leaked Makefile
+      # artefacts (none here -- clean checkout), regenerate Makefile.gen
+      # from _CoqProject.full, build the full corpus including
+      # theories-flocq/Validate_binary64_extract.v which writes
+      # oracle/extracted.ml.  Then compile oracle_bin from extracted.ml
+      # + driver.ml via oracle/Makefile.
+      run: |
+        su rocq -c '
+          set -euxo pipefail
+          eval $(opam env)
+          cd proofs
+          rocq makefile -f _CoqProject.full -o Makefile.gen
+          make -f Makefile.gen -j2
+          make -C oracle
+        '
+
+    - name: Sanity-check oracle binary (ORIENT_FILTERED smoke test)
+      # Confirms the binary actually runs and produces a parseable
+      # output line before we hand it to the C# differential suite.
+      # CCW unit triangle -> POS, with the cross product = 1.0.
+      run: |
+        printf 'ORIENT_FILTERED\n0 0\n1 0\n0 1\n' \
+          | proofs/oracle/oracle_bin
+
+    - name: Restore + build NetTopologySuite.Curve
+      working-directory: curve
+      run: |
+        dotnet restore -p:EnableApiCompat=false
+        dotnet build -c Release --no-restore -p:EnableApiCompat=false
+
+    - name: Run RocqRef differential tests
+      working-directory: curve
+      env:
+        # Absolute path so the test fixtures' File.Exists check resolves
+        # correctly regardless of which TestHost cwd dotnet test picks.
+        ROCQ_REF_BIN: ${{ github.workspace }}/proofs/oracle/oracle_bin
+      run: |
+        dotnet test -c Release --no-build -p:EnableApiCompat=false \
+          --filter 'FullyQualifiedName~RocqRef' \
+          --blame-hang-timeout 120s
