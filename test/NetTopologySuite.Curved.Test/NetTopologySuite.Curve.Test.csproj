@@ -17,7 +17,24 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\NetTopologySuite.Curved\NetTopologySuite.Curve.csproj" />
+    <!--
+      Spike-only reference to the proprietary clothoid-halley-coq C# library.
+      Used by test/Spike/* to construct chord-clothoid-chord polylines from
+      G^1 Hermite data.  The production NetTopologySuite.Curve assembly is
+      netstandard2.0 and intentionally does NOT depend on this library
+      (Clothoid.Halley targets net8.0).  The dependency lives at the test
+      layer only and is gated by file existence so the build still works
+      without a sibling clothoid-halley-coq checkout.
+    -->
+    <ProjectReference
+        Include="..\..\..\clothoid-halley-coq\csharp\Clothoid.Halley\Clothoid.Halley.csproj"
+        Condition="Exists('..\..\..\clothoid-halley-coq\csharp\Clothoid.Halley\Clothoid.Halley.csproj')" />
   </ItemGroup>
+
+  <PropertyGroup
+      Condition="Exists('..\..\..\clothoid-halley-coq\csharp\Clothoid.Halley\Clothoid.Halley.csproj')">
+    <DefineConstants>$(DefineConstants);CLOTHOID_HALLEY_AVAILABLE</DefineConstants>
+  </PropertyGroup>
 
   <ItemGroup>
     <Folder Include="IO\" />
