@@ -6,6 +6,18 @@ on:
   pull_request:
     branches: [ develop, 'phase1/**' ]
 
+env:
+  # The NetTopologySuite submodule's src/Directory.Build.props sets
+  # NtsBuildMetadata to "ci.github.$(GITHUB_ACTION)" when GITHUB_ACTIONS
+  # is true.  GitHub assigns GITHUB_ACTION values like "__run_2" /
+  # "__run_3" to successive run-script steps, but underscores aren't
+  # valid in SemVer 2.0.0 build metadata ([0-9A-Za-z-] only), so NuGet
+  # rejects the resulting version string ("2.4.0-pre...+ci.github.__run_2"
+  # is not a valid version string).  Override with a sanitised value
+  # before any dotnet command runs.  Upstream NetTopologySuite issue;
+  # this works around it for our CI without patching the submodule.
+  NtsBuildMetadata: ci.github.run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+
 jobs:
   build:
     name: Build (${{ matrix.os }})
