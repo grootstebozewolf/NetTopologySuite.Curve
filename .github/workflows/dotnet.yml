@@ -76,19 +76,23 @@ jobs:
         dotnet-version: 10
 
     - name: Download oracle_bin from NetTopologySuite.Proofs
-      # Latest successful run on Proofs main of the build-oracle.yml
-      # workflow.  Pin the action by SHA in a follow-up if reproducibility
-      # of third-party action versions becomes a concern.
-      uses: dawidd6/action-download-artifact@v6
-      with:
-        github_token: ${{ secrets.PROOFS_ACTIONS_READ_TOKEN }}
-        repo: grootstebozewolf/NetTopologySuite.Proofs
-        workflow: build-oracle.yml
-        workflow_conclusion: success
-        branch: main
-        name: oracle-bin-linux
-        path: oracle/
-        if_no_artifact_found: fail
+      # Pulls the latest oracle-bin-linux artifact from a successful run
+      # of build-oracle.yml on the Proofs `main` branch.  `gh` is pre-
+      # installed on ubuntu-latest; passing PROOFS_ACTIONS_READ_TOKEN
+      # via GH_TOKEN scopes it to the Proofs repo for this step.  Any
+      # auth or visibility issue surfaces as a direct `gh` error
+      # message rather than getting wrapped in third-party action logic.
+      env:
+        GH_TOKEN: ${{ secrets.PROOFS_ACTIONS_READ_TOKEN }}
+      run: |
+        set -euo pipefail
+        mkdir -p oracle/
+        gh run download \
+          --repo grootstebozewolf/NetTopologySuite.Proofs \
+          --workflow build-oracle.yml \
+          --branch main \
+          --name oracle-bin-linux \
+          --dir oracle/
 
     - name: Make oracle_bin executable + ORIENT_FILTERED smoke test
       # Artifacts strip the executable bit on upload; restore it before
