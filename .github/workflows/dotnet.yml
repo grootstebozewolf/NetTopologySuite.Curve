@@ -2,9 +2,21 @@ name: .NET
 
 on:
   push:
-    branches: [ develop ]
+    branches: [ develop, 'phase1/**' ]
   pull_request:
-    branches: [ develop ]
+    branches: [ develop, 'phase1/**' ]
+
+env:
+  # The NetTopologySuite submodule's src/Directory.Build.props sets
+  # NtsBuildMetadata to "ci.github.$(GITHUB_ACTION)" when GITHUB_ACTIONS
+  # is true.  GitHub assigns GITHUB_ACTION values like "__run_2" /
+  # "__run_3" to successive run-script steps, but underscores aren't
+  # valid in SemVer 2.0.0 build metadata ([0-9A-Za-z-] only), so NuGet
+  # rejects the resulting version string ("2.4.0-pre...+ci.github.__run_2"
+  # is not a valid version string).  Override with a sanitised value
+  # before any dotnet command runs.  Upstream NetTopologySuite issue;
+  # this works around it for our CI without patching the submodule.
+  NtsBuildMetadata: ci.github.run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
 
 jobs:
   build:
@@ -47,97 +59,118 @@ jobs:
     # test/.../Robust/{Orientation,Intersect,Simplify}/...RocqRefTests.cs
     # and are categorised [Category("RocqRef")]; they Assert.Ignore unless
     # the environment variable ROCQ_REF_BIN points at a built oracle_bin.
-    # This job builds that binary inside the pinned Rocq + Flocq Docker
-    # image used by the Proofs CI, then runs the four RocqRef fixtures
-    # against it (SIMPLIFY / ORIENT / ORIENT_FILTERED /
-    # INTERSECT_FILTERED / INTERSECT_POINT_FILTERED).
-    name: RocqRef differential tests (Linux + Rocq container)
+    #
+    # This job downloads the prebuilt oracle binary published by the
+    # NetTopologySuite.Proofs `build-oracle.yml` workflow (on every push
+    # to its main branch, plus release tags).  Avoids the ~5 min Rocq +
+    # Flocq build chain in CI.  Falls back to "no artifact -> fail this
+    # job" so a stale or expired upstream artifact surfaces immediately
+    # rather than silently skipping the differential tests.
+    #
+    # Required secret:
+    #   PROOFS_ACTIONS_READ_TOKEN -- a fine-grained PAT (or GitHub App
+    #   installation token) with `actions: read` + `contents: read` on
+    #   grootstebozewolf/NetTopologySuite.Proofs.  GitHub's auto-generated
+    #   GITHUB_TOKEN is scoped to the current repo only and cannot read
+    #   another repo's actions API even when that repo is public.
+    name: RocqRef differential tests (prebuilt oracle)
     runs-on: ubuntu-latest
-    container:
-      # Same base image as NetTopologySuite.Proofs/Dockerfile, so the
-      # opam state already has Rocq 9.1.1 + OCaml 4.14.2 flambda.  We
-      # only need to opam-install coq-flocq.4.2.2 on top.  --user root
-      # is required to apt-install .NET 10 and to chown the checkouts
-      # back to the rocq user for the opam-aware build steps.
-      image: rocq/rocq-prover:9.1.1-ocaml-4.14.2-flambda
-      options: --user root
 
     steps:
-    - name: Install system tooling (curl/git/make for Actions + oracle build)
-      run: |
-        apt-get update
-        apt-get install -y --no-install-recommends \
-          curl wget ca-certificates git make build-essential gpg
+    - name: Checkout NetTopologySuite.Curve
+      uses: actions/checkout@v5
+      with:
+        submodules: recursive
 
     - name: Setup .NET 10
       uses: actions/setup-dotnet@v5
       with:
         dotnet-version: 10
 
-    - name: Install Flocq 4.2.2 (rocq user's opam state)
-      # The base image's opam switch is owned by the rocq user.  We
-      # install Flocq under that switch so `eval $(opam env)` resolves
-      # to a consistent toolchain in the build step below.
-      run: su rocq -c 'opam install --confirm-level=unsafe-yes coq-flocq.4.2.2'
-
-    - name: Checkout NetTopologySuite.Curve
-      uses: actions/checkout@v5
-      with:
-        path: curve
-        submodules: recursive
-
-    - name: Checkout NetTopologySuite.Proofs (main)
-      # Pinned to main today.  When the Proofs corpus tags a release
-      # we should pin this to a tag instead so the differential tests
-      # don't break on every Proofs commit.
-      uses: actions/checkout@v5
-      with:
-        repository: grootstebozewolf/NetTopologySuite.Proofs
-        ref: main
-        path: proofs
-
-    - name: Hand checkouts to the rocq user
-      # actions/checkout runs as root, but the Rocq build chain needs
-      # rocq's opam env and write access to the checkout dirs.
-      run: chown -R rocq:rocq curve proofs
-
-    - name: Build Proofs (Flocq corpus) + extract oracle
-      # Mirrors the Proofs Dockerfile's CMD: clean host-leaked Makefile
-      # artefacts (none here -- clean checkout), regenerate Makefile.gen
-      # from _CoqProject.full, build the full corpus including
-      # theories-flocq/Validate_binary64_extract.v which writes
-      # oracle/extracted.ml.  Then compile oracle_bin from extracted.ml
-      # + driver.ml via oracle/Makefile.
+    - name: Download oracle_bin from NetTopologySuite.Proofs
+      # Pulls the latest oracle-bin-linux artifact from a successful run
+      # of build-oracle.yml on the Proofs `main` branch.  `gh` is pre-
+      # installed on ubuntu-latest; passing PROOFS_ACTIONS_READ_TOKEN
+      # via GH_TOKEN scopes it to the Proofs repo for this step.
+      #
+      # Diagnostics (auth status + workflow lookup) are printed before
+      # the download so a PAT-scope, repo-visibility, or branch-filter
+      # mismatch is visible in the step log.  On failure the captured
+      # gh output is re-emitted as a ::error:: annotation so the PR
+      # check summary shows the actual gh CLI message rather than just
+      # "exit code 1".
+      env:
+        GH_TOKEN: ${{ secrets.PROOFS_ACTIONS_READ_TOKEN }}
       run: |
-        su rocq -c '
-          set -euxo pipefail
-          eval $(opam env)
-          cd proofs
-          rocq makefile -f _CoqProject.full -o Makefile.gen
-          make -f Makefile.gen -j2
-          make -C oracle
-        '
+        set +e
+        mkdir -p oracle/
 
-    - name: Sanity-check oracle binary (ORIENT_FILTERED smoke test)
-      # Confirms the binary actually runs and produces a parseable
-      # output line before we hand it to the C# differential suite.
-      # CCW unit triangle -> POS, with the cross product = 1.0.
+        echo "::group::gh auth status"
+        gh auth status
+        echo "::endgroup::"
+
+        echo "::group::probe Proofs build-oracle.yml runs on main"
+        gh api \
+          repos/grootstebozewolf/NetTopologySuite.Proofs/actions/workflows/build-oracle.yml/runs \
+          -X GET -f branch=main -f status=success --jq \
+          '.workflow_runs[0:3] | .[] | {id, conclusion, head_branch, created_at}'
+        probe_rc=$?
+        echo "probe exit: $probe_rc"
+        echo "::endgroup::"
+
+        # `gh run download` doesn't accept --workflow; resolve the run ID
+        # first via `gh run list` (which does), then download by id.
+        echo "::group::resolve build-oracle.yml run ID on main"
+        run_id=$(gh run list \
+          --repo grootstebozewolf/NetTopologySuite.Proofs \
+          --workflow build-oracle.yml \
+          --branch main \
+          --status success \
+          --limit 1 \
+          --json databaseId \
+          --jq '.[0].databaseId')
+        list_rc=$?
+        echo "resolved run_id=${run_id} (rc=${list_rc})"
+        echo "::endgroup::"
+
+        if [ "${list_rc}" -ne 0 ] || [ -z "${run_id}" ] || [ "${run_id}" = "null" ]; then
+          echo "::error::Could not resolve a successful build-oracle.yml run on Proofs main (rc=${list_rc})"
+          exit 1
+        fi
+
+        echo "::group::gh run download ${run_id}"
+        out=$(gh run download "${run_id}" \
+          --repo grootstebozewolf/NetTopologySuite.Proofs \
+          --name oracle-bin-linux \
+          --dir oracle/ 2>&1)
+        rc=$?
+        echo "$out"
+        echo "::endgroup::"
+
+        if [ $rc -ne 0 ]; then
+          first_line=$(echo "$out" | head -1)
+          echo "::error::oracle_bin download failed (rc=$rc): ${first_line}"
+          exit $rc
+        fi
+
+    - name: Make oracle_bin executable + ORIENT_FILTERED smoke test
+      # Artifacts strip the executable bit on upload; restore it before
+      # the smoke test and the differential suite.
+      # CCW unit triangle -> POS with cross product = 1.0.
       run: |
-        printf 'ORIENT_FILTERED\n0 0\n1 0\n0 1\n' \
-          | proofs/oracle/oracle_bin
+        chmod +x oracle/oracle_bin
+        printf 'ORIENT_FILTERED\n0 0\n1 0\n0 1\n' | oracle/oracle_bin
 
     - name: Restore + build NetTopologySuite.Curve
-      working-directory: curve
       run: |
         dotnet restore -p:EnableApiCompat=false
         dotnet build -c Release --no-restore -p:EnableApiCompat=false
 
     - name: Run RocqRef differential tests
-      working-directory: curve
       env:
         # Absolute path so the test fixtures' File.Exists check resolves
         # correctly regardless of which TestHost cwd dotnet test picks.
-        ROCQ_REF_BIN: ${{ github.workspace }}/proofs/oracle/oracle_bin
+        ROCQ_REF_BIN: ${{ github.workspace }}/oracle/oracle_bin
       run: |
         dotnet test -c Release --no-build -p:EnableApiCompat=false \
           --filter 'FullyQualifiedName~RocqRef' \
