@@ -9,7 +9,10 @@ namespace NetTopologySuite.Geometries
     /// whose rings are made up of <see cref="Curve"/> rings.
     /// </summary>
     [Serializable]
-    public class CurvePolygon : Surface<Curve>, ILinearizable<Polygon>
+    public class CurvePolygon
+        : Surface<Curve>,
+          ILinearizable<Polygon>,
+          NetTopologySuite.Curved.Compat.ILinearizable<Polygon>
     {
         internal CurvePolygon(Curve exteriorRing, Curve[] interiorRings, CurveGeometryFactory factory)
             : base(factory)
@@ -183,7 +186,7 @@ namespace NetTopologySuite.Geometries
         /// <inheritdoc cref="Geometry.IsEquivalentClass"/>
         protected sealed override bool IsEquivalentClass(Geometry other)
         {
-            return other is ILinearizable<Polygon> || other is Polygon;
+            return other is NetTopologySuite.Curved.Compat.ILinearizable<Polygon> || other is Polygon;
         }
 
         /// <inheritdoc cref="Geometry.ConvexHull"/>
@@ -391,7 +394,7 @@ namespace NetTopologySuite.Geometries
             if (geom is LineString lineString)
                 return geom.Factory.CreateLinearRing(lineString.CoordinateSequence);
 
-            if (geom is ILinearizable<LineString> curve)
+            if (geom is NetTopologySuite.Curved.Compat.ILinearizable<LineString> curve)
                 return geom.Factory.CreateLinearRing(curve.Linearize(arcSegmentLength).CoordinateSequence);
 
             Assert.ShouldNeverReachHere("Invalid geometry type");

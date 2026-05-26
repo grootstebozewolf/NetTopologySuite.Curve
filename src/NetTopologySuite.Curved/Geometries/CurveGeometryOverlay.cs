@@ -51,10 +51,10 @@ namespace NetTopologySuite.Geometries
                         case GeometryCollection _:
                             geometries[i] = Flatten(testGeom);
                             break;
-                        case ILinearizable<LineString> curve:
+                        case NetTopologySuite.Curved.Compat.ILinearizable<LineString> curve:
                             geometries[i] = curve.Linearize();
                             break;
-                        case ILinearizable<Polygon> surface:
+                        case NetTopologySuite.Curved.Compat.ILinearizable<Polygon> surface:
                             geometries[i] = surface.Linearize();
                             break;
                         default:
@@ -82,8 +82,8 @@ namespace NetTopologySuite.Geometries
                             if (HasCurve(testGeom))
                                 return true;
                             break;
-                        case ILinearizable<LineString> _:
-                        case ILinearizable<Polygon> _:
+                        case NetTopologySuite.Curved.Compat.ILinearizable<LineString> _:
+                        case NetTopologySuite.Curved.Compat.ILinearizable<Polygon> _:
                             return true;
                     }
                 }
