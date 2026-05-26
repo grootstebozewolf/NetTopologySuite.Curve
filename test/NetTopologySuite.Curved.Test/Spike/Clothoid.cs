@@ -35,6 +35,7 @@
 // world-space chord (P1 - P0) and translate by P0.
 // =============================================================================
 
+#if CLOTHOID_HALLEY_AVAILABLE
 using System;
 using Clothoid.Halley;
 using NetTopologySuite.Geometries;
@@ -184,3 +185,4 @@ namespace NetTopologySuite.Test.Spike
         }
     }
 }
+#endif // CLOTHOID_HALLEY_AVAILABLE
