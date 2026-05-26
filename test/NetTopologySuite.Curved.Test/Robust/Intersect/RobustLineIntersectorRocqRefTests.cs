@@ -1,10 +1,26 @@
 // =============================================================================
 // NetTopologySuite.Curve.Robust.Intersect.RobustLineIntersectorRocqRefTests
 // -----------------------------------------------------------------------------
-// Differential tests against the RocqRefRunner INTERSECT_FILTERED mode.  For
-// each segment pair, run RobustLineIntersector.SignFiltered and the
-// Coq-extracted reference; assert the 5-valued sign matches.  Skipped by
-// default; activate by pointing `ROCQ_REF_BIN` at the RocqRefRunner binary.
+// Differential tests against the RocqRefRunner.  For each segment pair:
+//
+//   1. INTERSECT_FILTERED              -> compare the 5-valued sign with
+//                                         RobustLineIntersector.SignFiltered.
+//   2. INTERSECT_POINT_XY (Phase 1)    -> only when the sign is POINT, fetch
+//                                         the rounded intersection coords
+//                                         from the runner (XY <x> <y> -- a
+//                                         totals function, always defined)
+//                                         and bit-compare with the C# port.
+//
+// Non-POINT cases skip step 2 entirely (one spawn instead of two), since the
+// sign equality already certifies "no intersection point" on both sides.
+//
+// The option layer (INTERSECT_POINT_FILTERED -> NONE / POINT x y) is anchored
+// separately in OptionLayer_PointFiltered_AgreesWithSignAndXy; this confines
+// option-layer round-tripping to a small targeted fixture rather than every
+// fuzz case.
+//
+// Skipped by default; activate by pointing `ROCQ_REF_BIN` at the
+// RocqRefRunner binary.
 // =============================================================================
 
 using System;
@@ -152,6 +168,127 @@ namespace NetTopologySuite.Test.Robust.Intersect
         }
 
         // -----------------------------------------------------------------
+        // Adversarial: intersection near the origin, where cancellation in
+        // the Cramer numerator P0.x + s * (P1.x - P0.x) loses precision and
+        // any drift between the C# port and the Coq reference would show
+        // up first.
+        // -----------------------------------------------------------------
+        [TestCase(1e-300, TestName = "NearZero: 1e-300 subnormal regime")]
+        [TestCase(1e-200, TestName = "NearZero: 1e-200")]
+        [TestCase(1e-100, TestName = "NearZero: 1e-100")]
+        [TestCase(1e-50,  TestName = "NearZero: 1e-50")]
+        [TestCase(1e-15,  TestName = "NearZero: 1e-15 around ULP at 1.0")]
+        [TestCase(1e-9,   TestName = "NearZero: 1e-9")]
+        public void Adversarial_NearZeroIntersection_BitEqual(double eps)
+        {
+            AssertMatches(
+                new BPoint(-eps, -eps), new BPoint( eps,  eps),
+                new BPoint(-eps,  eps), new BPoint( eps, -eps));
+        }
+
+        // -----------------------------------------------------------------
+        // Adversarial: one segment vastly larger than the other.  The
+        // Coq-side b64 arithmetic is associativity-sensitive; if the C#
+        // port reorders the s = qp0 / den or the P0 + s*(P1-P0) chain,
+        // these mixed-scale crossings catch it.
+        // -----------------------------------------------------------------
+        [TestCase(1e10,  1e-10, TestName = "MixedScale: 1e10 x 1e-10")]
+        [TestCase(1e15,  1e-5,  TestName = "MixedScale: 1e15 x 1e-5")]
+        [TestCase(1e20,  1.0,   TestName = "MixedScale: 1e20 x 1.0")]
+        [TestCase(1e5,   1e-15, TestName = "MixedScale: 1e5 x 1e-15 (s ~ 0)")]
+        public void Adversarial_MixedScale_BitEqual(double big, double small)
+        {
+            // A horizontal segment of half-length `big` crossed by a vertical
+            // segment of half-length `small` centred on the same origin.  s
+            // (the Cramer parameter on the big segment) is exactly 0.5; the
+            // intersection point is (0, 0).
+            AssertMatches(
+                new BPoint(-big, 0), new BPoint(big, 0),
+                new BPoint(0, -small), new BPoint(0, small));
+        }
+
+        // -----------------------------------------------------------------
+        // Adversarial: an endpoint of one segment lies exactly on the
+        // interior of the other (T-junction with the witness coincident
+        // with a vertex).  Tests that the Cramer ratio s rounds to exactly
+        // 0 or 1 where the geometry demands it.
+        // -----------------------------------------------------------------
+        [TestCase(0, 0, 10, 0,  5, 0,  5,  5, TestName = "EndpointIncidence: Q0 mid-P, T up")]
+        [TestCase(0, 0, 10, 0,  5, 5,  5,  0, TestName = "EndpointIncidence: Q1 mid-P, T down")]
+        [TestCase(0, 0, 10, 0,  0, 0,  0,  5, TestName = "EndpointIncidence: Q0=P0 at vertex")]
+        [TestCase(0, 0, 10, 0, 10, 0, 10,  5, TestName = "EndpointIncidence: Q0=P1 at vertex")]
+        [TestCase(0, 0,  4, 4,  2, 2,  6,  2, TestName = "EndpointIncidence: cross at Q0 mid-P")]
+        public void Adversarial_EndpointIncidence_BitEqual(
+            double x0, double y0, double x1, double y1,
+            double xq0, double yq0, double xq1, double yq1)
+        {
+            AssertMatches(
+                new BPoint(x0, y0), new BPoint(x1, y1),
+                new BPoint(xq0, yq0), new BPoint(xq1, yq1));
+        }
+
+        // -----------------------------------------------------------------
+        // Adversarial: subnormal-magnitude coordinates.  Below DBL_MIN
+        // (~2.2e-308) the IEEE 754 representation loses the implicit
+        // leading bit and arithmetic operates with reduced precision.
+        // Any drift in how the C# port handles subnormals will surface
+        // here.
+        // -----------------------------------------------------------------
+        [Test]
+        public void Adversarial_Subnormal_BitEqual(
+            [Values(double.Epsilon, 1e-310, 1e-320)] double tiny)
+        {
+            AssertMatches(
+                new BPoint(-tiny, 0), new BPoint(tiny, 0),
+                new BPoint(0, -tiny), new BPoint(0, tiny));
+        }
+
+        // -----------------------------------------------------------------
+        // Option layer: INTERSECT_POINT_FILTERED rounds the runner's totals
+        // into an option.  Verify directly for representative cases that
+        // (i) it emits NONE for every non-POINT sign branch, and (ii) when
+        // it emits POINT, the coords match INTERSECT_POINT_XY (and the C#
+        // option-layer IntersectionPoint).
+        // -----------------------------------------------------------------
+        [TestCase(0, 0, 2, 0, 1, -1, 1, 1, TestName = "OptionLayer: proper crossing -> POINT")]
+        [TestCase(0, 0, 1, 0, 0, 1, 1, 1, TestName = "OptionLayer: disjoint -> NONE")]
+        [TestCase(0, 0, 1, 0, 2, 0, 3, 0, TestName = "OptionLayer: collinear disjoint -> NONE")]
+        [TestCase(0, 0, 2, 0, 1, 0, 3, 0, TestName = "OptionLayer: collinear overlap -> NONE")]
+        [TestCase(double.NaN, 0, 1, 0, 0, 1, 1, 1, TestName = "OptionLayer: NaN input -> NONE")]
+        public void OptionLayer_PointFiltered_AgreesWithSignAndXy(
+            double x0, double y0, double x1, double y1,
+            double xq0, double yq0, double xq1, double yq1)
+        {
+            var p0 = new BPoint(x0, y0);
+            var p1 = new BPoint(x1, y1);
+            var q0 = new BPoint(xq0, yq0);
+            var q1 = new BPoint(xq1, yq1);
+
+            var refSign     = RunRocqRefIntersectFiltered(p0, p1, q0, q1);
+            var refFiltered = RunRocqRefIntersectPointFiltered(p0, p1, q0, q1);
+
+            if (refSign == IntersectSign.Point)
+            {
+                Assert.That(refFiltered.hasPoint, Is.True,
+                    "option layer: INTERSECT_FILTERED=POINT but INTERSECT_POINT_FILTERED=NONE");
+
+                var (refX, refY) = RunRocqRefIntersectPointXy(p0, p1, q0, q1);
+                Assert.That(BitConverter.DoubleToInt64Bits(refFiltered.x),
+                            Is.EqualTo(BitConverter.DoubleToInt64Bits(refX)),
+                            "option-layer X bits diverge from totals");
+                Assert.That(BitConverter.DoubleToInt64Bits(refFiltered.y),
+                            Is.EqualTo(BitConverter.DoubleToInt64Bits(refY)),
+                            "option-layer Y bits diverge from totals");
+            }
+            else
+            {
+                Assert.That(refFiltered.hasPoint, Is.False,
+                    "option layer: INTERSECT_FILTERED=" + refSign +
+                    " but INTERSECT_POINT_FILTERED=POINT");
+            }
+        }
+
+        // -----------------------------------------------------------------
         // Helpers.
         // -----------------------------------------------------------------
 
@@ -162,16 +299,19 @@ namespace NetTopologySuite.Test.Robust.Intersect
             Assert.That(csSign, Is.EqualTo(refSign),
                 "intersect sign mismatch: C#=" + csSign + " RocqRef=" + refSign);
 
-            // Intersection point bit-equality.  Coq's b64_intersect_point and
-            // C#'s IntersectionPoint round identically; any divergence flags a
-            // port mismatch.  Both return null/None for non-Point results.
-            var (refHasPoint, refX, refY) = RunRocqRefIntersectPointFiltered(p0, p1, q0, q1);
             var csPoint = RobustLineIntersector.IntersectionPoint(p0, p1, q0, q1);
 
-            if (refHasPoint)
+            if (refSign == IntersectSign.Point)
             {
+                // Use INTERSECT_POINT_XY -- the Phase 1 totals mode -- since
+                // we've already determined the sign is POINT and the coords
+                // are geometrically meaningful.  Saves the option-layer
+                // round-trip (validated separately in
+                // OptionLayer_PointFiltered_AgreesWithSignAndXy).
+                var (refX, refY) = RunRocqRefIntersectPointXy(p0, p1, q0, q1);
+
                 Assert.That(csPoint, Is.Not.Null,
-                    "intersection point: C#=null while RocqRef returned POINT");
+                    "intersection point: C#=null while RocqRef sign=POINT");
                 long csXBits  = BitConverter.DoubleToInt64Bits(csPoint!.Value.X);
                 long refXBits = BitConverter.DoubleToInt64Bits(refX);
                 long csYBits  = BitConverter.DoubleToInt64Bits(csPoint.Value.Y);
@@ -186,67 +326,74 @@ namespace NetTopologySuite.Test.Robust.Intersect
             else
             {
                 Assert.That(csPoint, Is.Null,
-                    "intersection point: C# returned a point while RocqRef returned NONE");
+                    "intersection point: C# returned a point while RocqRef sign=" + refSign);
             }
         }
 
         private IntersectSign RunRocqRefIntersectFiltered(
             BPoint p0, BPoint p1, BPoint q0, BPoint q1)
         {
-            var psi = new ProcessStartInfo
+            string line = RunRocqRefSingleLine(
+                "INTERSECT_FILTERED", p0, p1, q0, q1, "intersect");
+
+            switch (line)
             {
-                FileName = _rocqRefPath,
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-            };
-            using (var proc = Process.Start(psi))
-            {
-                if (proc == null)
-                {
-                    Assert.Fail("RocqRefRunner process failed to start: " + _rocqRefPath);
+                case "NONE":      return IntersectSign.None;
+                case "POINT":     return IntersectSign.Point;
+                case "COLLINEAR": return IntersectSign.Collinear;
+                case "NAN":       return IntersectSign.Nan;
+                case "UNCERTAIN": return IntersectSign.Uncertain;
+                default:
+                    Assert.Fail("Unknown intersect token: " + line);
                     return IntersectSign.Nan;
-                }
-
-                using (var w = proc.StandardInput)
-                {
-                    w.WriteLine("INTERSECT_FILTERED");
-                    w.WriteLine(Fmt(p0.X) + " " + Fmt(p0.Y));
-                    w.WriteLine(Fmt(p1.X) + " " + Fmt(p1.Y));
-                    w.WriteLine(Fmt(q0.X) + " " + Fmt(q0.Y));
-                    w.WriteLine(Fmt(q1.X) + " " + Fmt(q1.Y));
-                }
-
-                string line = proc.StandardOutput.ReadLine();
-                proc.WaitForExit();
-                if (proc.ExitCode != 0)
-                {
-                    string err = proc.StandardError.ReadToEnd();
-                    Assert.Fail("RocqRefRunner exit code " + proc.ExitCode + ": " + err);
-                }
-                if (line == null)
-                {
-                    Assert.Fail("RocqRefRunner returned no output (intersect)");
-                }
-
-                string token = line.Trim();
-                switch (token)
-                {
-                    case "NONE":      return IntersectSign.None;
-                    case "POINT":     return IntersectSign.Point;
-                    case "COLLINEAR": return IntersectSign.Collinear;
-                    case "NAN":       return IntersectSign.Nan;
-                    case "UNCERTAIN": return IntersectSign.Uncertain;
-                    default:
-                        Assert.Fail("Unknown intersect token: " + token);
-                        return IntersectSign.Nan;
-                }
             }
         }
 
+        // Option-layer: NONE or POINT <x> <y>.  May report no intersection.
         private (bool hasPoint, double x, double y) RunRocqRefIntersectPointFiltered(
             BPoint p0, BPoint p1, BPoint q0, BPoint q1)
+        {
+            string line = RunRocqRefSingleLine(
+                "INTERSECT_POINT_FILTERED", p0, p1, q0, q1, "intersect point");
+
+            if (line == "NONE")
+            {
+                return (false, double.NaN, double.NaN);
+            }
+            var parts = line.Split(' ');
+            if (parts.Length != 3 || parts[0] != "POINT")
+            {
+                Assert.Fail("malformed intersect-point line: '" + line + "'");
+            }
+            double x = ParseOcamlFloat(parts[1]);
+            double y = ParseOcamlFloat(parts[2]);
+            return (true, x, y);
+        }
+
+        // Totals: XY <x> <y> unconditionally.  Callers are responsible for
+        // first calling INTERSECT_FILTERED to determine whether the coords
+        // are geometrically meaningful.
+        private (double x, double y) RunRocqRefIntersectPointXy(
+            BPoint p0, BPoint p1, BPoint q0, BPoint q1)
+        {
+            string line = RunRocqRefSingleLine(
+                "INTERSECT_POINT_XY", p0, p1, q0, q1, "intersect point xy");
+
+            var parts = line.Split(' ');
+            if (parts.Length != 3 || parts[0] != "XY")
+            {
+                Assert.Fail("malformed intersect-point-xy line: '" + line + "'");
+            }
+            double x = ParseOcamlFloat(parts[1]);
+            double y = ParseOcamlFloat(parts[2]);
+            return (x, y);
+        }
+
+        // Shared transport: spawn the runner, send `<mode>\n<4 points>`,
+        // return the single trimmed stdout line.  All three runner modes
+        // exposed by Phase 1 follow this protocol exactly.
+        private string RunRocqRefSingleLine(
+            string mode, BPoint p0, BPoint p1, BPoint q0, BPoint q1, string ctx)
         {
             var psi = new ProcessStartInfo
             {
@@ -261,12 +408,12 @@ namespace NetTopologySuite.Test.Robust.Intersect
                 if (proc == null)
                 {
                     Assert.Fail("RocqRefRunner process failed to start: " + _rocqRefPath);
-                    return (false, double.NaN, double.NaN);
+                    return string.Empty;
                 }
 
                 using (var w = proc.StandardInput)
                 {
-                    w.WriteLine("INTERSECT_POINT_FILTERED");
+                    w.WriteLine(mode);
                     w.WriteLine(Fmt(p0.X) + " " + Fmt(p0.Y));
                     w.WriteLine(Fmt(p1.X) + " " + Fmt(p1.Y));
                     w.WriteLine(Fmt(q0.X) + " " + Fmt(q0.Y));
@@ -278,26 +425,14 @@ namespace NetTopologySuite.Test.Robust.Intersect
                 if (proc.ExitCode != 0)
                 {
                     string err = proc.StandardError.ReadToEnd();
-                    Assert.Fail("RocqRefRunner exit code " + proc.ExitCode + ": " + err);
+                    Assert.Fail("RocqRefRunner exit code " + proc.ExitCode +
+                                " (" + ctx + "): " + err);
                 }
                 if (line == null)
                 {
-                    Assert.Fail("RocqRefRunner returned no output (intersect point)");
+                    Assert.Fail("RocqRefRunner returned no output (" + ctx + ")");
                 }
-
-                var trimmed = line.Trim();
-                if (trimmed == "NONE")
-                {
-                    return (false, double.NaN, double.NaN);
-                }
-                var parts = trimmed.Split(' ');
-                if (parts.Length != 3 || parts[0] != "POINT")
-                {
-                    Assert.Fail("malformed intersect-point line: '" + trimmed + "'");
-                }
-                double x = ParseOcamlFloat(parts[1]);
-                double y = ParseOcamlFloat(parts[2]);
-                return (true, x, y);
+                return line!.Trim();
             }
         }
 
