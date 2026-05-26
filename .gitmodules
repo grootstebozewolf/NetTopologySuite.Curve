@@ -1,4 +1,13 @@
+# Upstream `NetTopologySuite/NetTopologySuite` removed the `enhancement/curved`
+# branch and never merged its Curve / Surface / ILinearizable extensibility
+# layer into `develop`.  The fork's `src/NetTopologySuite.Curved/` still
+# depends on those types, so the submodule pin stays at 2772c9b3 (last tip of
+# the deleted branch, reachable from `origin/develop` history).  `branch` is
+# retargeted to `develop` so `git submodule update --remote` no longer fails
+# on the missing branch -- but do NOT run `--remote` blindly: the bump to
+# `develop` tip produces ~74 build errors until the curve infrastructure is
+# vendored locally.  Tracked separately.
 [submodule "NetTopologySuite"]
 	path = NetTopologySuite
 	url = https://github.com/NetTopologySuite/NetTopologySuite.git
-	branch = enhancement/curved
+	branch = develop
