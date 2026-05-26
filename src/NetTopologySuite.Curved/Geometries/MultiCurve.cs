@@ -5,7 +5,11 @@ namespace NetTopologySuite.Geometries
     /// <summary>
     /// A collection of multiple <see cref="Curve"/> geometries
     /// </summary>
-    public class MultiCurve : GeometryCollection, ILinearizable<MultiLineString>, ILineal
+    public class MultiCurve
+        : GeometryCollection,
+          ILinearizable<MultiLineString>,
+          NetTopologySuite.Curved.Compat.ILinearizable<MultiLineString>,
+          ILineal
     {
         internal MultiCurve(Geometry[] geometries, CurveGeometryFactory factory)
             : base(geometries ?? Array.Empty<Geometry>(), factory)
@@ -56,7 +60,7 @@ namespace NetTopologySuite.Geometries
                 for (int i = 0; i < NumGeometries; i++)
                 {
                     var testGeom = GetGeometryN(i);
-                    if (testGeom is ILinearizable<LineString> c)
+                    if (testGeom is NetTopologySuite.Curved.Compat.ILinearizable<LineString> c)
                         geoms[i] = c.Linearize(arcSegmentLength);
                     else
                         geoms[i] = (LineString) testGeom;
