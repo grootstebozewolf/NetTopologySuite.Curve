@@ -10,7 +10,7 @@ namespace NetTopologySuite.Geometries
     /// </summary>
     [Serializable]
     public class CurvePolygon
-        : Surface<Curve>,
+        : NetTopologySuite.Curved.Compat.Surface<Curve>,
           ILinearizable<Polygon>,
           NetTopologySuite.Curved.Compat.ILinearizable<Polygon>
     {

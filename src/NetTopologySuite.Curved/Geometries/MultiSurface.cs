@@ -18,6 +18,12 @@ namespace NetTopologySuite.Geometries
             for (int i = 0; i < geometries.Length; i++)
             {
                 var testGeom = geometries[i];
+                // TODO(dovetail-9): switch this guard to the fork-local
+                // NetTopologySuite.Curved.Compat.ISurface once upstream
+                // Polygon's base class changes on develop (right now
+                // Polygon : Surface<LineString> on 2772c9b3 means upstream
+                // ISurface still accepts plain Polygon, which the fork-
+                // local marker correctly wouldn't).
                 if (!(testGeom is ISurface))
                     throw new ArgumentException(nameof(geometries));
                 if (testGeom is GeometryCollection)
