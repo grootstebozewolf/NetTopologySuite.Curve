@@ -11,7 +11,7 @@ namespace NetTopologySuite.Geometries
 
         public void Filter(Geometry geom)
         {
-            if (geom is ILinearizable<T> linearized)
+            if (geom is NetTopologySuite.Curved.Compat.ILinearizable<T> linearized)
             {
                 //TODO 
             }

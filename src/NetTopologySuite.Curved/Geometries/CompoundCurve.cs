@@ -8,7 +8,10 @@ namespace NetTopologySuite.Geometries
     /// A curved geometry made up of several <see cref="Curve"/>s.
     /// </summary>
     [Serializable]
-    public sealed class CompoundCurve : Curve, ILinearizable<LineString>
+    public sealed class CompoundCurve
+        : Curve,
+          ILinearizable<LineString>,
+          NetTopologySuite.Curved.Compat.ILinearizable<LineString>
     {
         private readonly Curve[] _geometries;
 
@@ -236,7 +239,7 @@ namespace NetTopologySuite.Geometries
         /// <inheritdoc cref="Geometry.IsEquivalentClass"/>
         protected override bool IsEquivalentClass(Geometry other)
         {
-            return other is ILinearizable<LineString> || other is LineString;
+            return other is NetTopologySuite.Curved.Compat.ILinearizable<LineString> || other is LineString;
         }
 
         /// <inheritdoc cref="Geometry.ConvexHull"/>

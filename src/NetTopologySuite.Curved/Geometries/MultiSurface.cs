@@ -6,7 +6,11 @@ namespace NetTopologySuite.Geometries
     /// <summary>
     /// A collection of multiple <see cref="Surface{T}"/>s.
     /// </summary>
-    public class MultiSurface : GeometryCollection, ILinearizable<MultiPolygon>, IPolygonal
+    public class MultiSurface
+        : GeometryCollection,
+          ILinearizable<MultiPolygon>,
+          NetTopologySuite.Curved.Compat.ILinearizable<MultiPolygon>,
+          IPolygonal
     {
         internal MultiSurface(Geometry[] geometries, CurveGeometryFactory factory)
             : base(geometries, factory)
@@ -64,7 +68,7 @@ namespace NetTopologySuite.Geometries
                 for (int i = 0; i < NumGeometries; i++)
                 {
                     var testGeom = GetGeometryN(i);
-                    if (testGeom is ILinearizable<Polygon> c)
+                    if (testGeom is NetTopologySuite.Curved.Compat.ILinearizable<Polygon> c)
                         geoms[i] = c.Linearize(arcSegmentLength);
                     else
                         geoms[i] = (Polygon) testGeom;

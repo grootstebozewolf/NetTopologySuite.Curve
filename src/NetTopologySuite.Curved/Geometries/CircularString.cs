@@ -9,7 +9,10 @@ namespace NetTopologySuite.Geometries
     /// 
     /// </summary>
     [Serializable]
-    public sealed class CircularString : Curve, ILinearizable<LineString>
+    public sealed class CircularString
+        : Curve,
+          ILinearizable<LineString>,
+          NetTopologySuite.Curved.Compat.ILinearizable<LineString>
     {
         private CoordinateSequence _controlPoints;
         
@@ -233,7 +236,7 @@ namespace NetTopologySuite.Geometries
         /// <inheritdoc cref="Geometry.IsEquivalentClass"/>
         protected override bool IsEquivalentClass(Geometry other)
         {
-            return other is ILinearizable<LineString> || other is LineString;
+            return other is NetTopologySuite.Curved.Compat.ILinearizable<LineString> || other is LineString;
         }
 
         /// <inheritdoc cref="Geometry.ConvexHull"/>
