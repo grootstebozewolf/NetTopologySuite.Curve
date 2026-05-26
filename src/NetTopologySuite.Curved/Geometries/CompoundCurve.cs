@@ -9,7 +9,7 @@ namespace NetTopologySuite.Geometries
     /// </summary>
     [Serializable]
     public sealed class CompoundCurve
-        : Curve,
+        : NetTopologySuite.Curved.Compat.Curve,
           ILinearizable<LineString>,
           NetTopologySuite.Curved.Compat.ILinearizable<LineString>
     {

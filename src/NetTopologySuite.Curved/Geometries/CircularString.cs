@@ -10,7 +10,7 @@ namespace NetTopologySuite.Geometries
     /// </summary>
     [Serializable]
     public sealed class CircularString
-        : Curve,
+        : NetTopologySuite.Curved.Compat.Curve,
           ILinearizable<LineString>,
           NetTopologySuite.Curved.Compat.ILinearizable<LineString>
     {
