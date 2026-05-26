@@ -118,11 +118,29 @@ jobs:
         echo "probe exit: $probe_rc"
         echo "::endgroup::"
 
-        echo "::group::gh run download"
-        out=$(gh run download \
+        # `gh run download` doesn't accept --workflow; resolve the run ID
+        # first via `gh run list` (which does), then download by id.
+        echo "::group::resolve build-oracle.yml run ID on main"
+        run_id=$(gh run list \
           --repo grootstebozewolf/NetTopologySuite.Proofs \
           --workflow build-oracle.yml \
           --branch main \
+          --status success \
+          --limit 1 \
+          --json databaseId \
+          --jq '.[0].databaseId')
+        list_rc=$?
+        echo "resolved run_id=${run_id} (rc=${list_rc})"
+        echo "::endgroup::"
+
+        if [ "${list_rc}" -ne 0 ] || [ -z "${run_id}" ] || [ "${run_id}" = "null" ]; then
+          echo "::error::Could not resolve a successful build-oracle.yml run on Proofs main (rc=${list_rc})"
+          exit 1
+        fi
+
+        echo "::group::gh run download ${run_id}"
+        out=$(gh run download "${run_id}" \
+          --repo grootstebozewolf/NetTopologySuite.Proofs \
           --name oracle-bin-linux \
           --dir oracle/ 2>&1)
         rc=$?
@@ -130,7 +148,6 @@ jobs:
         echo "::endgroup::"
 
         if [ $rc -ne 0 ]; then
-          # Surface the actual error to the PR check annotation.
           first_line=$(echo "$out" | head -1)
           echo "::error::oracle_bin download failed (rc=$rc): ${first_line}"
           exit $rc
