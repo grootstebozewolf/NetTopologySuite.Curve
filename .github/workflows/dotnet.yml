@@ -79,20 +79,50 @@ jobs:
       # Pulls the latest oracle-bin-linux artifact from a successful run
       # of build-oracle.yml on the Proofs `main` branch.  `gh` is pre-
       # installed on ubuntu-latest; passing PROOFS_ACTIONS_READ_TOKEN
-      # via GH_TOKEN scopes it to the Proofs repo for this step.  Any
-      # auth or visibility issue surfaces as a direct `gh` error
-      # message rather than getting wrapped in third-party action logic.
+      # via GH_TOKEN scopes it to the Proofs repo for this step.
+      #
+      # Diagnostics (auth status + workflow lookup) are printed before
+      # the download so a PAT-scope, repo-visibility, or branch-filter
+      # mismatch is visible in the step log.  On failure the captured
+      # gh output is re-emitted as a ::error:: annotation so the PR
+      # check summary shows the actual gh CLI message rather than just
+      # "exit code 1".
       env:
         GH_TOKEN: ${{ secrets.PROOFS_ACTIONS_READ_TOKEN }}
       run: |
-        set -euo pipefail
+        set +e
         mkdir -p oracle/
-        gh run download \
+
+        echo "::group::gh auth status"
+        gh auth status
+        echo "::endgroup::"
+
+        echo "::group::probe Proofs build-oracle.yml runs on main"
+        gh api \
+          repos/grootstebozewolf/NetTopologySuite.Proofs/actions/workflows/build-oracle.yml/runs \
+          -X GET -f branch=main -f status=success --jq \
+          '.workflow_runs[0:3] | .[] | {id, conclusion, head_branch, created_at}'
+        probe_rc=$?
+        echo "probe exit: $probe_rc"
+        echo "::endgroup::"
+
+        echo "::group::gh run download"
+        out=$(gh run download \
           --repo grootstebozewolf/NetTopologySuite.Proofs \
           --workflow build-oracle.yml \
           --branch main \
           --name oracle-bin-linux \
-          --dir oracle/
+          --dir oracle/ 2>&1)
+        rc=$?
+        echo "$out"
+        echo "::endgroup::"
+
+        if [ $rc -ne 0 ]; then
+          # Surface the actual error to the PR check annotation.
+          first_line=$(echo "$out" | head -1)
+          echo "::error::oracle_bin download failed (rc=$rc): ${first_line}"
+          exit $rc
+        fi
 
     - name: Make oracle_bin executable + ORIENT_FILTERED smoke test
       # Artifacts strip the executable bit on upload; restore it before
