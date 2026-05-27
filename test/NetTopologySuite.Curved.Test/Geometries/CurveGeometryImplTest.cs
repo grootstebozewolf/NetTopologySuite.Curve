@@ -22,7 +22,7 @@ namespace NetTopologySuite.Test.Geometries
             LengthTolerance = lengthTolerance;
         }
 
-        protected NtsGeometryServices Instance { get; }
+        protected NtsCurveGeometryServices Instance { get; }
 
 
         protected static LineSegment CreateDirectedSegment(Coordinate p0, double dx, double dy) =>
@@ -37,24 +37,24 @@ namespace NetTopologySuite.Test.Geometries
 
         protected void CheckEquals(string wkt0, string wkt1, bool expected)
         {
-            var geom0 = Instance.WKTReader.Read(wkt0);
-            var geom1 = Instance.WKTReader.Read(wkt1);
+            var geom0 = Instance.CurveWKTReader.Read(wkt0);
+            var geom1 = Instance.CurveWKTReader.Read(wkt1);
 
             Assert.That(geom0.Equals(geom1), Is.EqualTo(expected));
         }
 
         protected void CheckEqualExact(string wkt0, string wkt1, bool expected)
         {
-            var geom0 = Instance.WKTReader.Read(wkt0);
-            var geom1 = Instance.WKTReader.Read(wkt1);
+            var geom0 = Instance.CurveWKTReader.Read(wkt0);
+            var geom1 = Instance.CurveWKTReader.Read(wkt1);
 
             Assert.That(geom0.EqualsExact(geom1, LengthTolerance), Is.EqualTo(expected));
         }
 
         protected void CheckEqualsNormalized(string wkt0, string wkt1, bool expected)
         {
-            var geom0 = Instance.WKTReader.Read(wkt0);
-            var geom1 = Instance.WKTReader.Read(wkt1);
+            var geom0 = Instance.CurveWKTReader.Read(wkt0);
+            var geom1 = Instance.CurveWKTReader.Read(wkt1);
 
             Assert.That(geom0.EqualsNormalized(geom1), Is.EqualTo(expected));
         }
