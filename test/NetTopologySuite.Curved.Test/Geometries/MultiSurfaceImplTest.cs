@@ -15,7 +15,7 @@ namespace NetTopologySuite.Test.Geometries
 
         protected override Geometry CreateGeometry()
         {
-            return Instance.WKTReader.Read(
+            return Instance.CurveWKTReader.Read(
                 "MULTISURFACE (((0 0, 10 0, 10 10, 0 10, 0 0), (1 1, 1 2, 2 1, 1 1)), CURVEPOLYGON (CIRCULARSTRING (0 5, 5 0, 0 -5, -5 0, 0 5), (-2 2, 2 2, 2 -2, -2 -2, -2 2)), EMPTY)");
         }
 
@@ -24,7 +24,7 @@ namespace NetTopologySuite.Test.Geometries
 
             var mc1 = Factory.CreateMultiCurve();
             var mc2 = Factory.CreateMultiCurve(Array.Empty<Geometry>());
-            var mc3 = Instance.WKTReader.Read("MULTISURFACE EMPTY");
+            var mc3 = Instance.CurveWKTReader.Read("MULTISURFACE EMPTY");
             Assert.That(mc1.IsEmpty);
             Assert.That(mc2.IsEmpty);
             Assert.That(mc3.IsEmpty);

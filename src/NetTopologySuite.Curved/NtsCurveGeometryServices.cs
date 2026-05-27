@@ -25,14 +25,25 @@ namespace NetTopologySuite
             PrecisionModel precisionModel, int srid, 
             CoordinateEqualityComparer coordinateEqualityComparer, double defaultArcSegmentLength)
             : base(coordinateSequenceFactory, precisionModel, srid, CurveGeometryOverlay.CurveV2, coordinateEqualityComparer,
-                t => new WKTReaderEx((NtsCurveGeometryServices)t), t => new WKTWriterEx(3),
+                t => new WKTReader(t), t => new WKTWriterEx(3),
                 t => new WKBReaderEx((NtsCurveGeometryServices)t), t => new WKBWriterEx())
         {
             if (defaultArcSegmentLength < 0d)
                 throw new ArgumentOutOfRangeException($"Must not be negative", nameof(defaultArcSegmentLength));
 
             DefaultArcSegmentLength = defaultArcSegmentLength;
+            CurveWKTReader = new NetTopologySuite.IO.CurveWKTReader(this);
         }
+
+        /// <summary>
+        /// Gets a reader that parses curve geometries (and ordinary geometries) from Well-Known Text.
+        /// </summary>
+        /// <remarks>
+        /// The inherited <see cref="NtsGeometryServices.WKTReader"/> is a plain <see cref="WKTReader"/>
+        /// and does not understand curve tagged text: upstream removed the override hook it used to rely
+        /// on. Use this reader for curve WKT.
+        /// </remarks>
+        public NetTopologySuite.IO.CurveWKTReader CurveWKTReader { get; }
 
         /// <summary>
         /// Gets a value indicating the default arc segment length that is used to flatten curved geometries.
