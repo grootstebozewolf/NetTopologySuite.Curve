@@ -9,7 +9,7 @@ namespace NetTopologySuite.Test.Geometries
     [TestFixtureSource("Services")]
     public class CurveGeometryFactoryTest
     {
-        private NtsGeometryServices _services;
+        private NtsCurveGeometryServices _services;
 
         public CurveGeometryFactoryTest(NtsCurveGeometryServices services)
         {
@@ -21,9 +21,9 @@ namespace NetTopologySuite.Test.Geometries
         {
             var curves = new Geometry[]
             {
-                _services.WKTReader.Read("LINESTRING (10 10, 11 10)"),
-                _services.WKTReader.Read("CIRCULARSTRING (10 10, 11 11, 12 10)"),
-                _services.WKTReader.Read("COMPOUNDCURVE ((12 10, 11 10), CIRCULARSTRING(11 10, 10 9, 11 8))"),
+                _services.CurveWKTReader.Read("LINESTRING (10 10, 11 10)"),
+                _services.CurveWKTReader.Read("CIRCULARSTRING (10 10, 11 11, 12 10)"),
+                _services.CurveWKTReader.Read("COMPOUNDCURVE ((12 10, 11 10), CIRCULARSTRING(11 10, 10 9, 11 8))"),
             };
 
             var geom = _services.CreateGeometryFactory().BuildGeometry(curves);
@@ -36,8 +36,8 @@ namespace NetTopologySuite.Test.Geometries
         {
             var curves = new Geometry[]
             {
-                _services.WKTReader.Read("POLYGON ((-2 2, 2 2, 2 -2, -2 -2, -2 2))"),
-                _services.WKTReader.Read("CURVEPOLYGON (CIRCULARSTRING (-122.358 47.653, -122.348 47.649, -122.348 47.658, -122.358 47.658, -122.358 47.653))"),
+                _services.CurveWKTReader.Read("POLYGON ((-2 2, 2 2, 2 -2, -2 -2, -2 2))"),
+                _services.CurveWKTReader.Read("CURVEPOLYGON (CIRCULARSTRING (-122.358 47.653, -122.348 47.649, -122.348 47.658, -122.358 47.658, -122.358 47.653))"),
             };
 
             var geom = _services.CreateGeometryFactory().BuildGeometry(curves);
