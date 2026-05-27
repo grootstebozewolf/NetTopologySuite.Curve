@@ -32,7 +32,7 @@ namespace NetTopologySuite.Test.Geometries
 
             var cs1 = Factory.CreateCircularString();
             var cs2 = Factory.CreateCircularString(pts);
-            var cs3 = Instance.WKTReader.Read("CIRCULARSTRING EMPTY");
+            var cs3 = Instance.CurveWKTReader.Read("CIRCULARSTRING EMPTY");
 
             Assert.That(cs1.IsEmpty);
             Assert.That(cs2.IsEmpty);

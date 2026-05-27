@@ -65,11 +65,11 @@ namespace NetTopologySuite.Test.IO
 
             if (!string.IsNullOrWhiteSpace(exceptionText))
             {
-                Assert.That(() => geom = _instance.WKTReader.Read(wkt), Throws.Exception);
+                Assert.That(() => geom = _instance.CurveWKTReader.Read(wkt), Throws.Exception);
                 return;
             }
 
-            Assert.That(() => geom = _instance.WKTReader.Read(wkt), Throws.Nothing);
+            Assert.That(() => geom = _instance.CurveWKTReader.Read(wkt), Throws.Nothing);
             Assert.That(geom, Is.Not.Null);
 
 
