@@ -26,7 +26,7 @@ namespace NetTopologySuite
             CoordinateEqualityComparer coordinateEqualityComparer, double defaultArcSegmentLength)
             : base(coordinateSequenceFactory, precisionModel, srid, CurveGeometryOverlay.CurveV2, coordinateEqualityComparer,
                 t => new WKTReader(t), t => new WKTWriterEx(3),
-                t => new WKBReaderEx((NtsCurveGeometryServices)t), t => new WKBWriterEx())
+                t => new CurveWKBReader((NtsCurveGeometryServices)t), t => new CurveWKBWriter())
         {
             if (defaultArcSegmentLength < 0d)
                 throw new ArgumentOutOfRangeException($"Must not be negative", nameof(defaultArcSegmentLength));
