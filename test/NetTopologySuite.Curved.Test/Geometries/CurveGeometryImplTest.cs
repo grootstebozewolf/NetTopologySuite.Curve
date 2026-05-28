@@ -66,7 +66,7 @@ namespace NetTopologySuite.Test.Geometries
         public abstract void TestIsValid();
 
         [Test]
-        public void TestSerializeability()
+        public virtual void TestSerializeability()
         {
             var geom1 = CreateGeometry();
             TestContext.WriteLine(geom1.ToText());
@@ -133,7 +133,7 @@ namespace NetTopologySuite.Test.Geometries
         }
 
         [Test]
-        public void TestApplyCoordinateSequenceFilter()
+        public virtual void TestApplyCoordinateSequenceFilter()
         {
             var geom = CreateGeometry();
             var test = geom.Copy();
@@ -149,7 +149,7 @@ namespace NetTopologySuite.Test.Geometries
         }
 
         [Test]
-        public void TestApplyEntireCoordinateSequenceFilter()
+        public virtual void TestApplyEntireCoordinateSequenceFilter()
         {
             var geom = CreateGeometry();
             var test = geom.Copy();

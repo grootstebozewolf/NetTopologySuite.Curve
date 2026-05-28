@@ -55,6 +55,7 @@ dlldata.c
 *.tmp
 *.tmp_proj
 *.log
+!docs/oracle-validation-*.log
 *.vspscc
 *.vssscc
 .builds
