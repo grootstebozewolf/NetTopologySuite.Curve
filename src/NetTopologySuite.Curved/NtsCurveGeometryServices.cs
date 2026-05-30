@@ -25,7 +25,7 @@ namespace NetTopologySuite
             PrecisionModel precisionModel, int srid, 
             CoordinateEqualityComparer coordinateEqualityComparer, double defaultArcSegmentLength)
             : base(coordinateSequenceFactory, precisionModel, srid, CurveGeometryOverlay.CurveV2, coordinateEqualityComparer,
-                t => new WKTReader(t), t => new WKTWriterEx(3),
+                t => new WKTReader(t), t => new WKTWriter(3),
                 t => new CurveWKBReader((NtsCurveGeometryServices)t), t => new CurveWKBWriter())
         {
             if (defaultArcSegmentLength < 0d)
@@ -33,6 +33,7 @@ namespace NetTopologySuite
 
             DefaultArcSegmentLength = defaultArcSegmentLength;
             CurveWKTReader = new NetTopologySuite.IO.CurveWKTReader(this);
+            CurveWKTWriter = new NetTopologySuite.IO.CurveWKTWriter(3);
         }
 
         /// <summary>
@@ -44,6 +45,17 @@ namespace NetTopologySuite
         /// on. Use this reader for curve WKT.
         /// </remarks>
         public NetTopologySuite.IO.CurveWKTReader CurveWKTReader { get; }
+
+        /// <summary>
+        /// Gets a writer that emits curve geometries (and ordinary geometries) as Well-Known Text.
+        /// </summary>
+        /// <remarks>
+        /// The inherited <see cref="NtsGeometryServices.WKTWriter"/> is a plain <see cref="WKTWriter"/>
+        /// and does not understand curve geometries: upstream removed the
+        /// <c>AppendOtherGeometryTaggedText</c> override hook the old <c>WKTWriterEx</c> relied on.
+        /// Use this writer for curve WKT (structural sibling of <see cref="CurveWKTReader"/>).
+        /// </remarks>
+        public NetTopologySuite.IO.CurveWKTWriter CurveWKTWriter { get; }
 
         /// <summary>
         /// Gets a value indicating the default arc segment length that is used to flatten curved geometries.

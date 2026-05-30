@@ -12,7 +12,7 @@ namespace NetTopologySuite.Test.IO
         {
             _instance = new NtsCurveGeometryServices(
                 CoordinateArraySequenceFactory.Instance, new PrecisionModel(10000), 0, new CoordinateEqualityComparer(), 0);
-            _instance.WKTWriter.OutputOrdinates = Ordinates.AllOrdinates;
+            _instance.CurveWKTWriter.OutputOrdinates = Ordinates.AllOrdinates;
         }
 
         /*
@@ -73,7 +73,7 @@ namespace NetTopologySuite.Test.IO
             Assert.That(geom, Is.Not.Null);
 
 
-            string written = _instance.WKTWriter.Write(geom);
+            string written = _instance.CurveWKTWriter.Write(geom);
             Assert.That(written, Is.EqualTo(wkt));
         }
     }
