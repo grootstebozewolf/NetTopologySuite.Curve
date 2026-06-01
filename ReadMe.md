@@ -84,20 +84,33 @@ dotnet test test/NetTopologySuite.Curved.Test/ \
 # 14/14 pass; 248 RocqRef cases marked Skipped.
 ```
 
-To activate the full RocqRef differential suite, build the RocqRefRunner from the proofs repo and point `ROCQ_REF_BIN` at it:
+To activate the full RocqRef differential suite you need the RocqRefRunner (the
+"oracle") and `ROCQ_REF_BIN` pointed at it.  You don't have to build the proof
+corpus locally — the [Proofs CI](https://github.com/grootstebozewolf/NetTopologySuite.Proofs/actions)
+publishes a prebuilt `oracle-bin-linux` artifact on every successful run, and
+[`scripts/fetch-oracle.sh`](scripts/fetch-oracle.sh) downloads the latest one:
 
 ```bash
-git clone https://github.com/grootstebozewolf/NetTopologySuite.Proofs.git
-# Build the proof corpus + extract OCaml (container or local rocq + coq-flocq):
-#   make -f Makefile.gen
-# Compile the RocqRefRunner:
-make -C NetTopologySuite.Proofs/oracle
-export ROCQ_REF_BIN=$(pwd)/NetTopologySuite.Proofs/oracle/oracle_bin
+# Needs a GitHub token with actions:read on the Proofs repo (artifacts are not
+# anonymously downloadable, even for public repos). A fine-grained PAT scoped
+# to NetTopologySuite.Proofs (Actions + Contents: read-only) is enough.
+export GH_TOKEN=<your-token>
+
+export ROCQ_REF_BIN="$(scripts/fetch-oracle.sh)"
 
 dotnet test test/NetTopologySuite.Curved.Test/ \
   --filter "FullyQualifiedName~GreedyPerp"
 # 262/262 pass, all bit-equal with the Coq spec.
 ```
+
+`fetch-oracle.sh` grabs the newest non-expired `oracle-bin-linux` by default;
+set `ARTIFACT_RUN=<run-id>` to pin a specific Proofs CI run.  The harness
+self-gates on `ROCQ_REF_BIN`: leave it unset and the differential cases report
+as Skipped while the structural unit tests still run.
+
+Prefer to build the oracle from source instead?  Clone the Proofs repo, build
+the corpus + extract OCaml (`make -f Makefile.gen`), compile the runner
+(`make -C oracle`), and point `ROCQ_REF_BIN` at `oracle/oracle_bin`.
 
 ---
 
@@ -105,4 +118,4 @@ dotnet test test/NetTopologySuite.Curved.Test/ \
 
 - **Shewchuk Stages B / C / D** — expansion-arithmetic refinement that resolves `OrientSignRobust.Uncertain` into a definite Pos/Neg/Zero.  Same Coq-spec + RocqRef pattern.
 - **Robust segment-segment intersection** — Phase 1 of the chokepoint roadmap.
-- **CI integration** — a workflow that builds the RocqRefRunner in a container and runs the differential suite as a PR gate.
+- **CI integration** — the [`RocqRef differential`](.github/workflows/rocqref-differential.yml) workflow downloads the prebuilt `oracle-bin-linux` artifact from the Proofs CI (via [`scripts/fetch-oracle.sh`](scripts/fetch-oracle.sh)) and runs the differential suite as a PR gate.  Set the `PROOFS_ARTIFACT_TOKEN` repo secret (a PAT with `actions:read` on the Proofs repo) to arm the differential cases; without it the gate runs the structural unit tests only.  Building the runner in-container from the proof corpus remains a possible future addition.

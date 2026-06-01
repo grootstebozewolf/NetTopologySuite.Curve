@@ -1,0 +1,80 @@
+name: RocqRef differential
+
+# Runs the RobustNTS unit tests and, when an oracle is available, the RocqRef
+# differential suite: every shipped C# result is compared bit-for-bit against
+# the OCaml binary extracted from the Coq corpus in NetTopologySuite.Proofs.
+#
+# Rather than build the proof corpus + extract OCaml in-container (slow, needs
+# rocq + coq-flocq), this workflow downloads the prebuilt `oracle-bin-linux`
+# artifact from the latest successful Proofs CI run and points ROCQ_REF_BIN at
+# it. The C# harness self-gates on ROCQ_REF_BIN: when it is unset the
+# differential cases are reported as Skipped and only the structural unit tests
+# run, so this workflow is safe to run even when the oracle can't be fetched
+# (e.g. fork PRs with no access to the cross-repo token).
+
+on:
+  push:
+    branches: [ develop ]
+  pull_request:
+    branches: [ develop ]
+  workflow_dispatch:
+    inputs:
+      artifact_run:
+        description: "Pin to a specific Proofs CI run id (blank = latest successful)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  differential:
+    runs-on: ubuntu-latest
+
+    # Surface the cross-repo token at job level so the download step's `if:`
+    # can test for its presence (step-level env and secrets aren't visible in
+    # a step's own `if`).
+    env:
+      PROOFS_ARTIFACT_TOKEN: ${{ secrets.PROOFS_ARTIFACT_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      # Cross-repo artifact download needs a token with actions:read on the
+      # Proofs repo. The default GITHUB_TOKEN only sees this repo, so supply a
+      # PAT via the PROOFS_ARTIFACT_TOKEN secret. When the secret is absent the
+      # step is skipped and the differential cases simply don't run.
+      - name: Download RocqRef oracle
+        id: oracle
+        if: ${{ env.PROOFS_ARTIFACT_TOKEN != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.PROOFS_ARTIFACT_TOKEN }}
+          ARTIFACT_RUN: ${{ github.event.inputs.artifact_run }}
+        run: |
+          bin="$(./scripts/fetch-oracle.sh --dest "$RUNNER_TEMP/oracle")"
+          echo "ROCQ_REF_BIN=$bin" >> "$GITHUB_ENV"
+          echo "Oracle: $bin"
+
+      - name: Report oracle status
+        run: |
+          if [ -n "${ROCQ_REF_BIN:-}" ]; then
+            echo "ROCQ_REF_BIN=$ROCQ_REF_BIN — RocqRef differential cases will run."
+          else
+            echo "::notice::No oracle available (PROOFS_ARTIFACT_TOKEN unset or download skipped). Differential cases will be Skipped; structural unit tests still run."
+          fi
+
+      - name: Restore
+        run: dotnet restore NetTopologySuite.Curve.sln -p:EnableApiCompat=false --source https://api.nuget.org/v3/index.json
+
+      - name: Build
+        run: dotnet build NetTopologySuite.Curve.sln --no-restore -p:EnableApiCompat=false
+
+      - name: Test
+        run: dotnet test test/NetTopologySuite.Curved.Test/ --no-build --verbosity normal
