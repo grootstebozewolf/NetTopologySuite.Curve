@@ -1,15 +1,50 @@
 # NetTopologySuite.Curve
-This project aims to add support for __circular__ geometries to the [NetTopologySuite](/NetTopologySuite/NetTopologySuite) project.
 
-The project is at an early stage, contributions are highly welcome.
-Help is especially needed for:
-- [] Unit tests
-- [] I/O WKT and WKB
-- [] Code documentation
+This project adds support for **circular** and other curved geometries to
+[NetTopologySuite](https://github.com/NetTopologySuite/NetTopologySuite).
 
-Stay tuned.
+The fork vendors the curve extensibility layer that upstream removed when
+`enhancement/curved` was deleted (`Curve`, `Surface<T>`, `ILinearizable<T>`,
+curve WKB/WKT hooks) under `src/NetTopologySuite.Curved/Compat/` and uses
+composition-based IO (`CurveWKTReader`/`Writer`, `CurveWKBReader`/`Writer`).
+See [DOVETAIL.md](docs/DOVETAIL.md) for the full session-by-session refactor
+log (sessions 1–10).
 
-### RocqRef-backed predicates
+## Upstream submodule
+
+The `NetTopologySuite/` git submodule tracks upstream **`develop`**.  The
+pinned SHA is recorded in the parent repo; do not run `git submodule update
+--remote` by hand unless you intend to take on an API-drift fix.  Instead,
+let the weekly CI lane (`.github/workflows/submodule-drift.yml`) bump the
+pointer and open a PR when the suite is green against `origin/develop` tip.
+
+After a fresh clone:
+
+```bash
+git submodule update --init --recursive
+dotnet build -c Release -p:EnableApiCompat=false
+dotnet test test/NetTopologySuite.Curved.Test/ -p:EnableApiCompat=false --blame-hang-timeout 60s
+```
+
+## CI
+
+| Job | Workflow | Purpose |
+|-----|----------|---------|
+| `Build (ubuntu / windows / macOS)` | [dotnet.yml](.github/workflows/dotnet.yml) | Release build + full test matrix on the pinned submodule |
+| `RocqRef differential tests` | [dotnet.yml](.github/workflows/dotnet.yml) | Oracle-backed robust-predicate fixtures |
+| `Build against upstream develop tip` | [submodule-drift.yml](.github/workflows/submodule-drift.yml) | Weekly drift check; auto-opens bump PR when green |
+
+## Standing test skips
+
+Nine `TestSerializeability` overrides in the curved-geometry fixtures
+`Assert.Ignore` because upstream `develop` removed `[Serializable]` from
+`GeometryFactoryEx`; curve types inherit through `CurveGeometryFactory`.
+Re-enable when a non-obsolete serializer is adopted.
+
+RocqRef fixtures (below) `Assert.Ignore` when `ROCQ_REF_BIN` is unset so the
+regular build matrix stays green without the Rocq toolchain.
+
+## RocqRef-backed predicates
 
 Three robust-predicate components under `NetTopologySuite.Robust` follow the
 specification proved in the companion
@@ -24,9 +59,7 @@ variable):
 | `Robust.Orientation.RobustOrientation` | `theories-flocq/Orientation_b64.v` | `ORIENT` + `ORIENT_FILTERED` | `RobustOrientationRocqRefTests` |
 | `Robust.Intersect.RobustLineIntersector` | `theories-flocq/Intersect_b64.v` + `Intersect_b64_exact.v` | `INTERSECT_FILTERED` + `INTERSECT_POINT_FILTERED` | `RobustLineIntersectorRocqRefTests` |
 
-The fixtures `Assert.Ignore` when `ROCQ_REF_BIN` is unset, so the regular
-build matrix (macOS / Windows / Linux without an oracle build) stays green
-without the Rocq toolchain installed.  The dedicated `rocqref` CI job in
+The dedicated `rocqref` CI job in
 [`dotnet.yml`](.github/workflows/dotnet.yml) builds the oracle binary
 inside the pinned Rocq + Flocq Docker image used by the Proofs corpus and
 runs the categorised tests for real.  To exercise the same path locally:
@@ -51,3 +84,5 @@ for the orientation predicate; five-valued sign + intersection-point
 agreement for the line intersector) plus bit-exact agreement with the
 Coq-extracted reference on every current fixture.
 
+Contributions are welcome — especially additional unit tests, IO coverage, and
+code documentation.

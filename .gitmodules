@@ -1,7 +1,8 @@
-# Submodule tracks upstream `NetTopologySuite/NetTopologySuite` `develop`.
-# Curve / Surface / ILinearizable infrastructure is vendored fork-locally in
-# `src/NetTopologySuite.Curved/Compat/` (dovetail sessions 2–9).  Session 10
-# adds a CI lane to catch future upstream drift early.
+# Submodule tracks upstream NetTopologySuite/NetTopologySuite develop.
+# The pointer is auto-bumped weekly by CI (.github/workflows/submodule-drift.yml)
+# when the suite is green against origin/develop tip.  Curve / Surface /
+# ILinearizable infrastructure is vendored fork-locally in
+# src/NetTopologySuite.Curved/Compat/ (dovetail sessions 2–9).
 [submodule "NetTopologySuite"]
 	path = NetTopologySuite
 	url = https://github.com/NetTopologySuite/NetTopologySuite.git
