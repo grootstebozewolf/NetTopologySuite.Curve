@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+
 namespace NetTopologySuite.Geometries
 {
     /// <summary>
@@ -81,7 +82,7 @@ namespace NetTopologySuite.Geometries
         /// Creates an empty <c>COMPOUNDCURVE</c> geometry
         /// </summary>
         /// <returns>An empty <c>COMPOUNDCURVE</c> geometry</returns>
-        public CompoundCurve CreateCompoundCurve() => CreateCompoundCurve(Array.Empty<Curve>());
+        public CompoundCurve CreateCompoundCurve() => CreateCompoundCurve(Array.Empty<Geometry>());
 
         /// <summary>
         /// Creates a <c>COMPOUNDCURVE</c> geometry sewed together using the provided .
@@ -89,11 +90,11 @@ namespace NetTopologySuite.Geometries
         /// the connectivity between them must be ensured.
         /// </summary>
         /// <returns>A <c>COMPOUNDCURVE</c> geometry</returns>
-        public CompoundCurve CreateCompoundCurve(Curve[] linealGeometries)
+        public CompoundCurve CreateCompoundCurve(Geometry[] linealGeometries)
         {
             // Ensure linealGeometries is not null
             if (linealGeometries == null)
-                linealGeometries = Array.Empty<Curve>();
+                linealGeometries = Array.Empty<Geometry>();
 
             Coordinate last = null;
             // Check for invalid types in linealGeometries
@@ -115,8 +116,8 @@ namespace NetTopologySuite.Geometries
                 if (last != null)
                 {
                     var first = ls != null
-                        ? ls.CoordinateSequence.First()
-                        : cs.ControlPoints.First();
+                        ? ls.CoordinateSequence.First
+                        : cs.ControlPoints.First;
 
                     if (Math.Abs(last.Distance(first)) > 5E-7)
                         throw new ArgumentException("Geometries are not in a sequence", nameof(linealGeometries));
@@ -124,8 +125,8 @@ namespace NetTopologySuite.Geometries
 
                 // Keep last for connectivity check
                 last = ls != null
-                    ? ls.CoordinateSequence.Last()
-                    : cs.ControlPoints.Last();
+                    ? ls.CoordinateSequence.Last
+                    : cs.ControlPoints.Last;
             }
 
             // Create geometry
@@ -143,9 +144,9 @@ namespace NetTopologySuite.Geometries
         /// </summary>
         /// <param name="exteriorRing">The geometry defining the exterior ring.</param>
         /// <returns>An empty <c>CURVEPOLYGON</c> geometry</returns>
-        public CurvePolygon CreateCurvePolygon(Curve exteriorRing)
+        public CurvePolygon CreateCurvePolygon(Geometry exteriorRing)
         {
-            return CreateCurvePolygon(exteriorRing, Array.Empty<Curve>());
+            return CreateCurvePolygon(exteriorRing, Array.Empty<Geometry>());
         }
 
         /// <summary>
@@ -155,26 +156,26 @@ namespace NetTopologySuite.Geometries
         /// <param name="exteriorRing">The geometry defining the exterior ring.</param>
         /// <param name="interiorRings">An array of geometries defining the interior rings.</param>
         /// <returns>An empty <c>CURVEPOLYGON</c> geometry</returns>
-        public CurvePolygon CreateCurvePolygon(Curve exteriorRing, Curve[] interiorRings)
+        public CurvePolygon CreateCurvePolygon(Geometry exteriorRing, Geometry[] interiorRings)
         {
             if (exteriorRing == null)
                 exteriorRing = CreateLinearRing();
 
-            if (!(exteriorRing is Curve exteriorRingCurve))
-                throw new ArgumentException("exteriorRing is not a ICurve", nameof(exteriorRing));
+            if (!(exteriorRing is ILineal exteriorRingCurve))
+                throw new ArgumentException("exteriorRing is not lineal", nameof(exteriorRing));
 
-            if (!exteriorRingCurve.IsRing)
+            if (!IsValidRing(exteriorRing))
                 throw new ArgumentException("exteriorRing does not form a valid ring", nameof(exteriorRing));
 
             if (interiorRings == null)
-                interiorRings = Array.Empty<Curve>();
+                interiorRings = Array.Empty<Geometry>();
 
             var extEnv = exteriorRing.EnvelopeInternal;
             for (int i = 0; i < interiorRings.Length; i++)
             {
-                if (!(interiorRings[i] is Curve interiorRingCurve))
-                    throw new ArgumentException($"interiorRing[{i}] is not a ICurve", nameof(exteriorRing));
-                if (!interiorRingCurve.IsRing)
+                if (!(interiorRings[i] is ILineal))
+                    throw new ArgumentException($"interiorRing[{i}] is not lineal", nameof(interiorRings));
+                if (!IsValidRing(interiorRings[i]))
                     throw new ArgumentException($"interiorRing[{i}] does not form a valid ring", nameof(interiorRings));
                 if (!extEnv.Contains(interiorRings[i].EnvelopeInternal))
                     throw new ArgumentException($"interiorRing[{i}] not contained by exterior ring", nameof(interiorRings));
@@ -212,7 +213,7 @@ namespace NetTopologySuite.Geometries
         /// Creates a <c>MULTISURFACE</c> geometry based on the provided
         /// <paramref name="geometries"/> surfaces.
         /// </summary>
-        /// <param name="geometries">An array of <see cref="ISurface"/> geometries</param>
+        /// <param name="geometries">An array of <see cref="NetTopologySuite.Curved.Compat.ISurface"/> geometries</param>
         /// <returns>An empty <c>MULTISURFACE</c> geometry</returns>
         public MultiSurface CreateMultiSurface(params Geometry[] geometries)
         {
@@ -245,9 +246,9 @@ namespace NetTopologySuite.Geometries
                     isHeterogeneous = true;
                 if (geom is GeometryCollection)
                     hasGeometryCollection = true;
-                if (geom is ISurface)
+                if (geom is NetTopologySuite.Curved.Compat.ISurface || geom is Polygon)
                     numSurface++;
-                if (geom is Curve)
+                if (geom is NetTopologySuite.Curved.Compat.Curve || geom is LineString)
                     numCurve++;
             }
 
@@ -276,11 +277,9 @@ namespace NetTopologySuite.Geometries
             {
                 if (geom0 is Polygon)
                     return CreateMultiPolygon(ToPolygonArray(geoms));
-                if (geom0 is ISurface)
+                if (geom0 is NetTopologySuite.Curved.Compat.ISurface || geom0 is Polygon)
                     return CreateMultiSurface(geoms.ToArray());
-                if (geom0 is LineString)
-                    return CreateMultiLineString(ToLineStringArray(geoms));
-                if (geom0 is Curve)
+                if (geom0 is NetTopologySuite.Curved.Compat.Curve || geom0 is LineString)
                     return CreateMultiCurve(geoms.ToArray());
                 if (geom0 is Point)
                     return CreateMultiPoint(ToPointArray(geoms));
@@ -289,6 +288,15 @@ namespace NetTopologySuite.Geometries
                 //Assert.ShouldNeverReachHere("Unhandled class: " + geom0.GetType().FullName);
             }
             return geom0;
+        }
+
+        private static bool IsValidRing(Geometry ring)
+        {
+            if (ring is NetTopologySuite.Curved.Compat.Curve curve)
+                return curve.IsRing;
+            if (ring is LinearRing)
+                return true;
+            return ring is LineString ls && ls.IsClosed && ls.IsSimple;
         }
     }
 }

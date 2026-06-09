@@ -1,28 +1,5 @@
-// =============================================================================
-// NetTopologySuite.Curved.Compat.Surface<T>
-// -----------------------------------------------------------------------------
-// Fork-local bridge to the upstream-removed
-// `NetTopologySuite.Geometries.Surface<T>` abstract base.  See
-// docs/DOVETAIL.md for context.
-//
-// On the pinned commit 2772c9b3 this bridge extends upstream Surface<T>
-// and additionally implements the fork-local ISurface marker, so that
-//
-//   * Pattern matches on upstream Surface<T> or ISurface (in upstream
-//     code, and in fork code like MultiSurface's ISurface check) keep
-//     matching fork instances of CurvePolygon transparently.
-//   * Fork-side pattern matches that use the fork-local
-//     `NetTopologySuite.Curved.Compat.ISurface` also match, which
-//     prepares those call sites for the session 9 bump.
-//
-// At session 9 the upstream Surface<T> and ISurface disappear.  The
-// `: NetTopologySuite.Geometries.Surface<T>` line below stops compiling
-// and is replaced with a verbatim port of upstream's 2772c9b3 Surface<T>
-// body (Dimension.Surface, BoundaryDimension, ExteriorRing/
-// NumInteriorRings/GetInteriorRingN abstracts, etc.) plus `: Geometry,
-// ISurface` (the fork-local ISurface).  Fork types continue inheriting
-// from Compat.Surface<T> unchanged.
-// =============================================================================
+// Fork-local port of upstream 2772c9b3 NetTopologySuite.Geometries.Surface<T>.
+// See docs/DOVETAIL.md session 9.
 
 using System;
 using NetTopologySuite.Geometries;
@@ -30,21 +7,13 @@ using NetTopologySuite.Geometries;
 namespace NetTopologySuite.Curved.Compat
 {
     /// <summary>
-    /// Bridge to the upstream-removed
-    /// <c>NetTopologySuite.Geometries.Surface&lt;T&gt;</c> abstract base.
-    /// Fork-local surface types target this instead of the upstream type
-    /// directly so the transition off the deleted
-    /// <c>enhancement/curved</c> branch is a one-file edit (this file)
-    /// at the bump.
+    /// Abstract base class for geometries that have a <c>Dimension</c> of
+    /// <see cref="Dimension.Surface"/> and only have <b>one</b> component.
     /// </summary>
-    /// <typeparam name="T">Type of the rings, must inherit from upstream
-    /// <c>Curve</c> (which the fork-local <c>Compat.Curve</c> bridge
-    /// satisfies).</typeparam>
+    /// <typeparam name="T">Type of the rings; must inherit from <see cref="Curve"/>.</typeparam>
     [Serializable]
-    public abstract class Surface<T>
-        : NetTopologySuite.Geometries.Surface<T>,
-          NetTopologySuite.Curved.Compat.ISurface
-        where T : NetTopologySuite.Geometries.Curve
+    public abstract class Surface<T> : Geometry, ISurface
+        where T : Geometry
     {
         /// <summary>
         /// Creates an instance of this class.
@@ -53,5 +22,28 @@ namespace NetTopologySuite.Curved.Compat
         protected Surface(GeometryFactory factory) : base(factory)
         {
         }
+
+        /// <inheritdoc cref="Geometry.Dimension"/>
+        public sealed override Dimension Dimension => Dimension.Surface;
+
+        /// <inheritdoc cref="Geometry.BoundaryDimension"/>
+        public sealed override Dimension BoundaryDimension => Dimension.Curve;
+
+        /// <summary>
+        /// Gets the exterior ring of the surface.
+        /// </summary>
+        public abstract T ExteriorRing { get; }
+
+        /// <summary>
+        /// Gets the number of interior rings inside the polygon.
+        /// </summary>
+        public abstract int NumInteriorRings { get; }
+
+        /// <summary>
+        /// Gets the interior ring at <paramref name="index"/>.
+        /// </summary>
+        /// <param name="index">The index of the requested ring.</param>
+        /// <returns>An interior ring.</returns>
+        public abstract T GetInteriorRingN(int index);
     }
 }

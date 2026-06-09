@@ -57,9 +57,7 @@ namespace NetTopologySuite.Test.Geometries
         public override void TestSerializeability()
         {
             Assert.Ignore(
-                "Pending: BinaryFormatter introspection fails on net10.0 for " +
-                "MultiCurve graphs containing EMPTY children.  Test infrastructure " +
-                "issue, not a NetTopologySuite.Curve regression.");
+                "Pending: GeometryFactoryEx is not [Serializable] on upstream develop.");
         }
 
 

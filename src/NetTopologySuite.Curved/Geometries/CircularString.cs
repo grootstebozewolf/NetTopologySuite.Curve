@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using Curve = NetTopologySuite.Curved.Compat.Curve;
 
 namespace NetTopologySuite.Geometries
 {
@@ -10,8 +11,7 @@ namespace NetTopologySuite.Geometries
     /// </summary>
     [Serializable]
     public sealed class CircularString
-        : NetTopologySuite.Curved.Compat.Curve,
-          ILinearizable<LineString>,
+        : Curve,
           NetTopologySuite.Curved.Compat.ILinearizable<LineString>
     {
         private CoordinateSequence _controlPoints;
@@ -127,7 +127,7 @@ namespace NetTopologySuite.Geometries
             {
                 if (IsEmpty)
                     return false;
-                return ControlPoints.First().Equals2D(ControlPoints.Last());
+                return ControlPoints.First.Equals2D(ControlPoints.Last);
             }
         }
 
@@ -138,7 +138,7 @@ namespace NetTopologySuite.Geometries
             {
                 if (IsEmpty)
                     return null;
-                return Factory.CreatePoint(ControlPoints.First());
+                return Factory.CreatePoint(ControlPoints.First);
             }
         }
 
@@ -149,7 +149,7 @@ namespace NetTopologySuite.Geometries
             {
                 if (IsEmpty)
                     return null;
-                return Factory.CreatePoint(ControlPoints.Last());
+                return Factory.CreatePoint(ControlPoints.Last);
             }
         }
 
@@ -164,6 +164,12 @@ namespace NetTopologySuite.Geometries
         {
             get { return IsRing ? SortIndexValue.LinearRing : SortIndexValue.LineString; }
         }
+
+        /// <inheritdoc cref="Geometry.ToText"/>
+        public new string ToText() => CurveGeometryIo.ToText(this);
+
+        /// <inheritdoc cref="Geometry.ToBinary"/>
+        public new byte[] ToBinary() => CurveGeometryIo.ToBinary(this);
 
         /// <inheritdoc cref="Geometry.Coordinates"/>
         public override Coordinate[] Coordinates => Linearize().Coordinates;

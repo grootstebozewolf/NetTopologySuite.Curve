@@ -117,7 +117,7 @@ namespace NetTopologySuite.IO
             if (IsCurve(child))
                 WriteCurve(child, writer, false);
             else
-                Write(child, writer, false);
+                Write(child, writer);
         }
 
         // Mirrors WKBWriter.WriteHeader's flag math; the only difference is that we know the

@@ -69,7 +69,7 @@ namespace NetTopologySuite.Test.Geometries
         public virtual void TestSerializeability()
         {
             var geom1 = CreateGeometry();
-            TestContext.WriteLine(geom1.ToText());
+            TestContext.WriteLine(Instance.CurveWKTWriter.Write(geom1));
             Geometry geom2 = null;
 
             var old = NtsGeometryServices.Instance;
@@ -91,7 +91,7 @@ namespace NetTopologySuite.Test.Geometries
             Assert.That(geom2, Is.Not.Null);
             Assert.That(geom2.EqualsExact(geom1));
 
-            TestContext.WriteLine(geom2.ToText());
+            TestContext.WriteLine(Instance.CurveWKTWriter.Write(geom2));
 
             NtsGeometryServices.Instance = old;
         }
