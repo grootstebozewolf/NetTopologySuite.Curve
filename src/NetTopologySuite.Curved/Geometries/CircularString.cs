@@ -157,6 +157,8 @@ namespace NetTopologySuite.Geometries
 
         #region Geometry overloads
 
+        // dovetail-8: keep SortIndex overrides (semantic collection ordering). Session 9
+        // vendors SortIndexValue into Compat when the upstream enum is removed.
         /// <inheritdoc cref="Geometry.SortIndex"/>
         protected override SortIndexValue SortIndex
         {
@@ -189,7 +191,7 @@ namespace NetTopologySuite.Geometries
         /// <inheritdoc cref="Geometry.Apply(IGeometryComponentFilter)"/>
         public override void Apply(IGeometryComponentFilter filter)
         {
-            Linearize().Apply(filter);
+            filter.Filter(this);
         }
 
         /// <inheritdoc cref="Apply(ICoordinateFilter)"/>
@@ -214,8 +216,8 @@ namespace NetTopologySuite.Geometries
             if (!filter.GeometryChanged)
                 return;
 
-            GeometryChanged();
             Linearized = null;
+            GeometryChanged();
         }
 
         /// <inheritdoc cref="Geometry.Apply(IEntireCoordinateSequenceFilter)"/>
@@ -229,8 +231,8 @@ namespace NetTopologySuite.Geometries
             if (!filter.GeometryChanged)
                 return;
 
-            GeometryChanged();
             Linearized = null;
+            GeometryChanged();
         }
 
         /// <inheritdoc cref="Geometry.IsEquivalentClass"/>
