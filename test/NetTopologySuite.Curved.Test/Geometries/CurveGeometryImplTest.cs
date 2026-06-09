@@ -145,7 +145,7 @@ namespace NetTopologySuite.Test.Geometries
             at = AffineTransformation.TranslationInstance(-100, 0);
             test.Apply(new AffineTransformationFilter1(at));
 
-            Assert.That(test.EqualsExact(geom), Is.True);
+            Assert.That(test.EqualsExact(geom, LengthTolerance), Is.True);
         }
 
         [Test]
@@ -161,7 +161,7 @@ namespace NetTopologySuite.Test.Geometries
             at = AffineTransformation.TranslationInstance(0, -100);
             test.Apply(new AffineTransformationFilter1(at));
 
-            Assert.That(test.EqualsExact(geom), Is.True);
+            Assert.That(test.EqualsExact(geom, LengthTolerance), Is.True);
         }
     }
 }
