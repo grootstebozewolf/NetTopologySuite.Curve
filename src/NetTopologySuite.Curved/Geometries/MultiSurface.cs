@@ -8,7 +8,6 @@ namespace NetTopologySuite.Geometries
     /// </summary>
     public class MultiSurface
         : GeometryCollection,
-          ILinearizable<MultiPolygon>,
           NetTopologySuite.Curved.Compat.ILinearizable<MultiPolygon>,
           IPolygonal
     {
@@ -18,13 +17,7 @@ namespace NetTopologySuite.Geometries
             for (int i = 0; i < geometries.Length; i++)
             {
                 var testGeom = geometries[i];
-                // TODO(dovetail-9): switch this guard to the fork-local
-                // NetTopologySuite.Curved.Compat.ISurface once upstream
-                // Polygon's base class changes on develop (right now
-                // Polygon : Surface<LineString> on 2772c9b3 means upstream
-                // ISurface still accepts plain Polygon, which the fork-
-                // local marker correctly wouldn't).
-                if (!(testGeom is ISurface))
+                if (!(testGeom is NetTopologySuite.Curved.Compat.ISurface || testGeom is Polygon))
                     throw new ArgumentException(nameof(geometries));
                 if (testGeom is GeometryCollection)
                     throw new ArgumentException(nameof(geometries));
@@ -93,6 +86,12 @@ namespace NetTopologySuite.Geometries
 
         /// <inheritdoc cref="Geometry.SortIndex"/>
         protected override SortIndexValue SortIndex => SortIndexValue.MultiPolygon;
+
+        /// <inheritdoc cref="Geometry.ToText"/>
+        public new string ToText() => CurveGeometryIo.ToText(this);
+
+        /// <inheritdoc cref="Geometry.ToBinary"/>
+        public new byte[] ToBinary() => CurveGeometryIo.ToBinary(this);
 
         /// <inheritdoc cref="Geometry.Dimension"/>
         public override Dimension Dimension => Dimension.Surface;

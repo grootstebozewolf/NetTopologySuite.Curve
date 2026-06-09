@@ -12,7 +12,7 @@ namespace NetTopologySuite.Test.IO
         {
             _instance = new NtsCurveGeometryServices(
                 CoordinateArraySequenceFactory.Instance, new PrecisionModel(10000), 0, new CoordinateEqualityComparer(), 0);
-            _instance.WKTWriter.OutputOrdinates = Ordinates.AllOrdinates;
+            _instance.CurveWKTWriter.OutputOrdinates = Ordinates.AllOrdinates;
         }
 
         /*
@@ -73,11 +73,11 @@ namespace NetTopologySuite.Test.IO
             Assert.That(geom, Is.Not.Null);
 
             byte[] wkb = null;
-            Assert.That(() => wkb = _instance.WKBWriter.Write(geom), Throws.Nothing);
+            Assert.That(() => wkb = _instance.CurveWKBWriter.Write(geom), Throws.Nothing);
             Assert.That(wkb, Is.Not.Null);
 
             Geometry geom2 = null;
-            Assert.That(() => geom2 = _instance.WKBReader.Read(wkb), Throws.Nothing);
+            Assert.That(() => geom2 = _instance.CurveWKBReader.Read(wkb), Throws.Nothing);
             Assert.That(geom2, Is.Not.Null);
 
             Assert.That(geom2, Is.EqualTo(geom));

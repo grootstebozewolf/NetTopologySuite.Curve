@@ -1,20 +1,18 @@
 using System;
 using System.Collections.Generic;
 using NetTopologySuite.Utilities;
-
 namespace NetTopologySuite.Geometries
 {
     /// <summary>
     /// A <see cref="Surface{T}"/> implementation of a <see cref="Polygon"/> but
-    /// whose rings are made up of <see cref="Curve"/> rings.
+    /// whose rings are made up of lineal curve or linear ring geometries.
     /// </summary>
     [Serializable]
     public class CurvePolygon
-        : NetTopologySuite.Curved.Compat.Surface<Curve>,
-          ILinearizable<Polygon>,
+        : NetTopologySuite.Curved.Compat.Surface<Geometry>,
           NetTopologySuite.Curved.Compat.ILinearizable<Polygon>
     {
-        internal CurvePolygon(Curve exteriorRing, Curve[] interiorRings, CurveGeometryFactory factory)
+        internal CurvePolygon(Geometry exteriorRing, Geometry[] interiorRings, CurveGeometryFactory factory)
             : base(factory)
         {
             ExteriorRing = exteriorRing;
@@ -24,9 +22,9 @@ namespace NetTopologySuite.Geometries
         #region Surface{T} implementation
 
         /// <inheritdoc cref="Surface{T}.ExteriorRing"/>
-        public override Curve ExteriorRing { get; }
+        public override Geometry ExteriorRing { get; }
 
-        private IReadOnlyList<Curve> InteriorRings { get; }
+        private IReadOnlyList<Geometry> InteriorRings { get; }
 
 
         /// <inheritdoc cref="Surface{T}.NumInteriorRings"/>
@@ -36,7 +34,7 @@ namespace NetTopologySuite.Geometries
         }
 
         /// <inheritdoc cref="Surface{T}.GetInteriorRingN(int)"/>
-        public override Curve GetInteriorRingN(int index)
+        public override Geometry GetInteriorRingN(int index)
         {
             return InteriorRings[index];
         }
@@ -275,6 +273,12 @@ namespace NetTopologySuite.Geometries
         /// </remarks>
         protected override SortIndexValue SortIndex => SortIndexValue.Polygon;
 
+        /// <inheritdoc cref="Geometry.ToText"/>
+        public new string ToText() => CurveGeometryIo.ToText(this);
+
+        /// <inheritdoc cref="Geometry.ToBinary"/>
+        public new byte[] ToBinary() => CurveGeometryIo.ToBinary(this);
+
         /// <inheritdoc cref="Geometry.EqualsExact(NetTopologySuite.Geometries.Geometry,double)"/>
         public override bool EqualsExact(Geometry other, double tolerance)
         {
@@ -299,11 +303,11 @@ namespace NetTopologySuite.Geometries
         /// <inheritdoc cref="Geometry.CopyInternal()"/>
         protected override Geometry CopyInternal()
         {
-            var interiorRings = new Curve[InteriorRings.Count];
+            var interiorRings = new Geometry[InteriorRings.Count];
             for (int i = 0; i < InteriorRings.Count; i++)
-                interiorRings[i] = (Curve)InteriorRings[i].Copy();
+                interiorRings[i] = InteriorRings[i].Copy();
 
-            var res = new CurvePolygon((Curve)ExteriorRing.Copy(), interiorRings, (CurveGeometryFactory)Factory);
+            var res = new CurvePolygon(ExteriorRing.Copy(), interiorRings, (CurveGeometryFactory)Factory);
             return res;
         }
 
@@ -316,7 +320,7 @@ namespace NetTopologySuite.Geometries
         /// <inheritdoc cref="Geometry.CompareToSameClass(object)"/>
         protected override int CompareToSameClass(object o)
         {
-            if (!(o is ISurface))
+            if (!(o is NetTopologySuite.Curved.Compat.ISurface))
                 throw new ArgumentException("Not a surface", nameof(o));
 
             if (o is CurvePolygon cp)
@@ -342,7 +346,7 @@ namespace NetTopologySuite.Geometries
         /// <inheritdoc cref="Geometry.CompareToSameClass(object, IComparer{CoordinateSequence})"/>
         protected override int CompareToSameClass(object o, IComparer<CoordinateSequence> comparer)
         {
-            if (!(o is ISurface))
+            if (!(o is NetTopologySuite.Curved.Compat.ISurface))
                 throw new ArgumentException("Not a surface", nameof(o));
 
             if (o is CurvePolygon cp)

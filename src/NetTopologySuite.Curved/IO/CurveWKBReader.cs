@@ -121,9 +121,9 @@ namespace NetTopologySuite.IO
         private CompoundCurve ReadCompoundCurve(BiEndianBinaryReader reader, int srid)
         {
             int numCurves = reader.ReadInt32();
-            var curves = new Curve[numCurves];
+            var curves = new Geometry[numCurves];
             for (int i = 0; i < numCurves; i++)
-                curves[i] = (Curve)ReadChild(reader, srid);
+                curves[i] = ReadChild(reader, srid);
             return Factory(srid).CreateCompoundCurve(curves);
         }
 
@@ -133,10 +133,10 @@ namespace NetTopologySuite.IO
             if (numRings == 0)
                 return Factory(srid).CreateCurvePolygon();
 
-            var exteriorRing = (Curve)ReadChild(reader, srid);
-            var interiorRings = new Curve[numRings - 1];
+            var exteriorRing = ReadChild(reader, srid);
+            var interiorRings = new Geometry[numRings - 1];
             for (int i = 0; i < numRings - 1; i++)
-                interiorRings[i] = (Curve)ReadChild(reader, srid);
+                interiorRings[i] = ReadChild(reader, srid);
 
             return Factory(srid).CreateCurvePolygon(exteriorRing, interiorRings);
         }
@@ -183,7 +183,7 @@ namespace NetTopologySuite.IO
             if (childBase >= 8 && childBase <= 12)
                 return ReadCurveGeometry(reader, srid);
 
-            return ReadGeometry(reader, srid);
+            return Read(reader);
         }
     }
 }

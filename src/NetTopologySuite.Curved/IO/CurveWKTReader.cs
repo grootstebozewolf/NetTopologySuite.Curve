@@ -203,7 +203,7 @@ namespace NetTopologySuite.IO
             if (nextToken.Equals(WKTConstants.EMPTY))
                 return factory.CreateCompoundCurve();
 
-            var curves = new List<Curve>();
+            var curves = new List<Geometry>();
             do
             {
                 var curve = ReadCurveText(tokens, factory, ordinateFlags, false);
@@ -215,7 +215,7 @@ namespace NetTopologySuite.IO
             return factory.CreateCompoundCurve(curves.ToArray());
         }
 
-        private Curve ReadCurveText(TokenStream tokens, CurveGeometryFactory factory, Ordinates ordinateFlags, bool allowCompoundCurve)
+        private Geometry ReadCurveText(TokenStream tokens, CurveGeometryFactory factory, Ordinates ordinateFlags, bool allowCompoundCurve)
         {
             string current = LookAheadWord(tokens);
 
@@ -248,7 +248,7 @@ namespace NetTopologySuite.IO
             if (nextToken.Equals(WKTConstants.EMPTY))
                 return factory.CreateCurvePolygon();
 
-            var holes = new List<Curve>();
+            var holes = new List<Geometry>();
             var shell = ReadCurveText(tokens, factory, ordinateFlags, true);
             nextToken = GetNextCloserOrComma(tokens);
             while (nextToken.Equals(","))

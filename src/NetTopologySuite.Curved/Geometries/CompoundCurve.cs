@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Curve = NetTopologySuite.Curved.Compat.Curve;
 
 namespace NetTopologySuite.Geometries
 {
@@ -9,13 +10,12 @@ namespace NetTopologySuite.Geometries
     /// </summary>
     [Serializable]
     public sealed class CompoundCurve
-        : NetTopologySuite.Curved.Compat.Curve,
-          ILinearizable<LineString>,
+        : Curve,
           NetTopologySuite.Curved.Compat.ILinearizable<LineString>
     {
-        private readonly Curve[] _geometries;
+        private readonly Geometry[] _geometries;
 
-        internal CompoundCurve(Curve[] geometries, CurveGeometryFactory factory)
+        internal CompoundCurve(Geometry[] geometries, CurveGeometryFactory factory)
             : base(factory)
         {
             _geometries = geometries;
@@ -26,7 +26,7 @@ namespace NetTopologySuite.Geometries
         /// <summary>
         /// Gets a list of the underlying <see cref="Curve"/> geometries.
         /// </summary>
-        public IReadOnlyList<Curve> Curves
+        public IReadOnlyList<Geometry> Curves
         {
             get => _geometries;
         }
@@ -86,20 +86,20 @@ namespace NetTopologySuite.Geometries
                 {
                     flattened[i] = _geometries[i] is CircularString cs
                         ? cs.Linearize(arcSegmentLength)
-                        : (LineString) _geometries[i];
+                        : (LineString)_geometries[i];
 
                     var sequence = flattened[i].CoordinateSequence;
                     numPoints += flattened[i].NumPoints;
                     if (last != null)
                     {
-                        if (last.Equals(sequence.First()))
+                        if (last.Equals(sequence.First))
                         {
                             numPoints--;
                             offset[i] = 1;
                         }
                     }
 
-                    last = sequence.Last();
+                    last = sequence.Last;
                 }
 
                 var seq = Factory.CoordinateSequenceFactory.Create(numPoints,
@@ -136,7 +136,7 @@ namespace NetTopologySuite.Geometries
             {
                 if (IsEmpty)
                     return null;
-                return Curves[0].StartPoint;
+                return SegmentStartPoint(Curves[0]);
             }
         }
 
@@ -147,8 +147,26 @@ namespace NetTopologySuite.Geometries
             {
                 if (IsEmpty)
                     return null;
-                return Curves[Curves.Count-1].EndPoint;
+                return SegmentEndPoint(Curves[Curves.Count - 1]);
             }
+        }
+
+        private static Point SegmentStartPoint(Geometry segment)
+        {
+            if (segment is Curve curve)
+                return curve.StartPoint;
+            if (segment is LineString lineString)
+                return lineString.StartPoint;
+            return segment.Coordinate == null ? null : segment.Factory.CreatePoint(segment.Coordinate);
+        }
+
+        private static Point SegmentEndPoint(Geometry segment)
+        {
+            if (segment is Curve curve)
+                return curve.EndPoint;
+            if (segment is LineString lineString)
+                return lineString.EndPoint;
+            return segment.Coordinate == null ? null : segment.Factory.CreatePoint(segment.Coordinate);
         }
 
         #endregion
@@ -158,6 +176,12 @@ namespace NetTopologySuite.Geometries
         {
             get { return IsRing ? SortIndexValue.LinearRing : SortIndexValue.LineString; }
         }
+
+        /// <inheritdoc cref="Geometry.ToText"/>
+        public new string ToText() => CurveGeometryIo.ToText(this);
+
+        /// <inheritdoc cref="Geometry.ToBinary"/>
+        public new byte[] ToBinary() => CurveGeometryIo.ToBinary(this);
 
         /// <inheritdoc cref="Geometry.Centroid"/>
         public override Point Centroid => Linearize().Centroid;
@@ -339,9 +363,9 @@ namespace NetTopologySuite.Geometries
         /// <inheritdoc cref="Geometry.CopyInternal"/>
         protected override Geometry CopyInternal()
         {
-            var res = new Curve[NumGeometries];
+            var res = new Geometry[NumGeometries];
             for (int i = 0; i < NumGeometries; i++)
-                res[i] = (Curve)_geometries[i].Copy();
+                res[i] = _geometries[i].Copy();
 
             return new CompoundCurve(res, (CurveGeometryFactory)Factory);
         }

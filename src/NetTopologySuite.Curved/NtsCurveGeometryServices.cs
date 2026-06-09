@@ -1,4 +1,5 @@
 ﻿using System;
+using NetTopologySuite.Algorithm;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.IO;
 
@@ -24,9 +25,8 @@ namespace NetTopologySuite
         public NtsCurveGeometryServices(CoordinateSequenceFactory coordinateSequenceFactory,
             PrecisionModel precisionModel, int srid, 
             CoordinateEqualityComparer coordinateEqualityComparer, double defaultArcSegmentLength)
-            : base(coordinateSequenceFactory, precisionModel, srid, CurveGeometryOverlay.CurveV2, coordinateEqualityComparer,
-                t => new WKTReader(t), t => new WKTWriter(3),
-                t => new CurveWKBReader((NtsCurveGeometryServices)t), t => new CurveWKBWriter())
+            : base(coordinateSequenceFactory, precisionModel, srid,
+                CurveGeometryOverlay.CurveV2, GeometryRelate.Legacy, coordinateEqualityComparer)
         {
             if (defaultArcSegmentLength < 0d)
                 throw new ArgumentOutOfRangeException($"Must not be negative", nameof(defaultArcSegmentLength));
@@ -34,6 +34,8 @@ namespace NetTopologySuite
             DefaultArcSegmentLength = defaultArcSegmentLength;
             CurveWKTReader = new NetTopologySuite.IO.CurveWKTReader(this);
             CurveWKTWriter = new NetTopologySuite.IO.CurveWKTWriter(3);
+            CurveWKBReader = new CurveWKBReader(this);
+            CurveWKBWriter = new CurveWKBWriter();
         }
 
         /// <summary>
@@ -58,12 +60,23 @@ namespace NetTopologySuite
         public NetTopologySuite.IO.CurveWKTWriter CurveWKTWriter { get; }
 
         /// <summary>
+        /// Gets a reader that parses curve geometries (and ordinary geometries) from Well-Known Binary.
+        /// </summary>
+        public CurveWKBReader CurveWKBReader { get; }
+
+        /// <summary>
+        /// Gets a writer that emits curve geometries (and ordinary geometries) as Well-Known Binary.
+        /// </summary>
+        public CurveWKBWriter CurveWKBWriter { get; }
+
+        /// <summary>
         /// Gets a value indicating the default arc segment length that is used to flatten curved geometries.
         /// </summary>
         private double DefaultArcSegmentLength { get; }
 
         /// <inheritdoc cref="CreateGeometryFactoryCore"/>
-        protected override GeometryFactory CreateGeometryFactoryCore(PrecisionModel precisionModel, int srid,
+        protected override GeometryFactory CreateGeometryFactoryCore(
+            PrecisionModel precisionModel, ElevationModel elevationModel, int srid,
             CoordinateSequenceFactory coordinateSequenceFactory)
         {
             return new CurveGeometryFactory(precisionModel, srid, coordinateSequenceFactory, this,

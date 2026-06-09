@@ -1,4 +1,5 @@
 using System;
+using Curve = NetTopologySuite.Curved.Compat.Curve;
 
 namespace NetTopologySuite.Geometries
 {
@@ -7,7 +8,6 @@ namespace NetTopologySuite.Geometries
     /// </summary>
     public class MultiCurve
         : GeometryCollection,
-          ILinearizable<MultiLineString>,
           NetTopologySuite.Curved.Compat.ILinearizable<MultiLineString>,
           ILineal
     {
@@ -82,6 +82,12 @@ namespace NetTopologySuite.Geometries
         {
             get => SortIndexValue.MultiLineString;
         }
+
+        /// <inheritdoc cref="Geometry.ToText"/>
+        public new string ToText() => CurveGeometryIo.ToText(this);
+
+        /// <inheritdoc cref="Geometry.ToBinary"/>
+        public new byte[] ToBinary() => CurveGeometryIo.ToBinary(this);
 
         /// <inheritdoc cref="Geometry.Dimension"/>
         public override Dimension Dimension => Dimension.Curve;
