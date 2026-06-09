@@ -1,0 +1,77 @@
+name: NetTopologySuite submodule drift
+
+# Weekly lane that builds and tests against upstream develop tip so API
+# drift surfaces early instead of accumulating into another multi-year bump.
+# When the pinned submodule SHA lags origin/develop and the suite is green,
+# opens a bump PR automatically.
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  NtsBuildMetadata: ci.github.run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+
+jobs:
+  develop-tip:
+    name: Build against upstream develop tip
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Get source
+      uses: actions/checkout@v5
+      with:
+        submodules: recursive
+
+    - name: Setup .NET 10
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: 10
+
+    - name: Resolve upstream develop tip
+      id: upstream
+      working-directory: NetTopologySuite
+      run: |
+        git fetch origin develop
+        echo "tip=$(git rev-parse origin/develop)" >> "$GITHUB_OUTPUT"
+        echo "pinned=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+    - name: Bump submodule checkout to develop tip (workspace only)
+      if: steps.upstream.outputs.tip != steps.upstream.outputs.pinned
+      working-directory: NetTopologySuite
+      run: git checkout "${{ steps.upstream.outputs.tip }}"
+
+    - name: Stage submodule pointer when drifted
+      if: steps.upstream.outputs.tip != steps.upstream.outputs.pinned
+      run: git add NetTopologySuite
+
+    - name: Restore
+      run: dotnet restore -p:EnableApiCompat=false
+
+    - name: Build
+      run: dotnet build -c Release --no-restore -p:EnableApiCompat=false
+
+    - name: Test
+      run: dotnet test -c Release --no-build -p:EnableApiCompat=false --blame-hang-timeout 120s
+
+    - name: Open bump PR
+      if: |
+        github.event_name == 'schedule' &&
+        steps.upstream.outputs.tip != steps.upstream.outputs.pinned
+      uses: peter-evans/create-pull-request@v7
+      with:
+        commit-message: 'chore: bump NetTopologySuite submodule to develop tip'
+        branch: chore/submodule-bump-${{ steps.upstream.outputs.tip }}
+        delete-branch: true
+        title: 'chore: bump NetTopologySuite submodule to develop tip'
+        body: |
+          Automated weekly drift check (`.github/workflows/submodule-drift.yml`).
+
+          Bumps the `NetTopologySuite` submodule from `${{ steps.upstream.outputs.pinned }}` to `${{ steps.upstream.outputs.tip }}` (`origin/develop` tip). The full `NetTopologySuite.Curved` test suite passed against the new pointer in CI before this PR was opened.
+
+          If this PR fails CI, upstream API drift needs a manual fix in `src/NetTopologySuite.Curved/Compat/` or callers — see [DOVETAIL.md](docs/DOVETAIL.md).
+        labels: dependencies
