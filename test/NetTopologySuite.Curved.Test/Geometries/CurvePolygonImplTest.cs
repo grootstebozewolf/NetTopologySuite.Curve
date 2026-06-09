@@ -61,32 +61,6 @@ namespace NetTopologySuite.Test.Geometries
             Assert.Inconclusive();
         }
 
-        // CurvePolygon.Apply(ICoordinateSequenceFilter) (line 156) calls
-        // GeometryChanged() before resetting Linearized.  That routes through
-        // Apply(IGeometryComponentFilter) (line 128) -> Linearize() ->
-        // ToLinearRing() -> Factory.CreateLinearRing(seq), which fails when
-        // the linearisation of the compound shell after the affine transform
-        // doesn't close exactly:
-        //   System.ArgumentException: points must form a closed linestring.
-        // TODO(curve-test-triage): fix CurvePolygon.Apply (reset Linearized
-        // BEFORE GeometryChanged, or skip the IGeometryComponentFilter pass
-        // when only coords changed) or fix CompoundCurve.Linearize closure
-        // preservation, then drop these overrides.
-        [Test]
-        public override void TestApplyCoordinateSequenceFilter()
-        {
-            Assert.Ignore(
-                "Pending: CurvePolygon.Apply -> GeometryChanged -> Linearize " +
-                "throws 'points must form a closed linestring' after the " +
-                "affine transform.  See CurvePolygon.cs line 156.");
-        }
 
-        [Test]
-        public override void TestApplyEntireCoordinateSequenceFilter()
-        {
-            Assert.Ignore(
-                "Pending: same root cause as TestApplyCoordinateSequenceFilter " +
-                "via the IEntireCoordinateSequenceFilter overload.");
-        }
     }
 }

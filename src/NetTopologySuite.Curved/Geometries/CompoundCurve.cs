@@ -191,7 +191,9 @@ namespace NetTopologySuite.Geometries
         /// <inheritdoc cref="Geometry.Apply(IGeometryComponentFilter)"/>
         public override void Apply(IGeometryComponentFilter filter)
         {
-            Linearize().Apply(filter);
+            filter.Filter(this);
+            for (int i = 0; i < _geometries.Length; i++)
+                _geometries[i].Apply(filter);
         }
 
         /// <inheritdoc cref="Apply(ICoordinateFilter)"/>
@@ -214,8 +216,8 @@ namespace NetTopologySuite.Geometries
             if (!filter.GeometryChanged)
                 return;
 
-            GeometryChanged();
             Linearized = null;
+            GeometryChanged();
         }
 
         /// <inheritdoc cref="Geometry.Apply(IEntireCoordinateSequenceFilter)"/>
@@ -232,8 +234,8 @@ namespace NetTopologySuite.Geometries
             if (!filter.GeometryChanged)
                 return;
 
-            GeometryChanged();
             Linearized = null;
+            GeometryChanged();
         }
 
         /// <inheritdoc cref="Geometry.IsEquivalentClass"/>

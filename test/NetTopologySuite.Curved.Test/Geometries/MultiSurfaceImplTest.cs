@@ -52,26 +52,6 @@ namespace NetTopologySuite.Test.Geometries
                 "MultiSurface graphs.  See MultiCurveImplTest.TestSerializeability.");
         }
 
-        // MultiSurface contains a CurvePolygon child; dispatching Apply
-        // into that child hits the same CurvePolygon.Apply ->
-        // GeometryChanged -> Linearize "non-closed linestring" failure
-        // documented in CurvePolygonImplTest.
-        // TODO(curve-test-triage): drop once CurvePolygon.Apply is fixed.
-        [Test]
-        public override void TestApplyCoordinateSequenceFilter()
-        {
-            Assert.Ignore(
-                "Pending: MultiSurface.Apply over a CurvePolygon child hits " +
-                "the CurvePolygon.Apply -> Linearize closure failure.  See " +
-                "CurvePolygon.cs line 156.");
-        }
 
-        [Test]
-        public override void TestApplyEntireCoordinateSequenceFilter()
-        {
-            Assert.Ignore(
-                "Pending: same root cause as TestApplyCoordinateSequenceFilter " +
-                "via the IEntireCoordinateSequenceFilter overload.");
-        }
     }
 }
