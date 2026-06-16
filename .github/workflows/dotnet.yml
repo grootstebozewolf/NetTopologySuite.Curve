@@ -5,35 +5,36 @@ on:
     branches: [ develop ]
   pull_request:
     branches: [ develop ]
+  workflow_dispatch:
 
 jobs:
   build:
-    name: Build (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
 
-    strategy:
-      matrix:
-        os: [ ubuntu-latest, windows-latest, macOS-latest ]
+    runs-on: ubuntu-latest
+
+    env:
+      # The NTS submodule derives its version build-metadata from
+      # ci.github.$(GITHUB_ACTION); GitHub sets GITHUB_ACTION to "__run" for
+      # inline run: steps, and the underscores make an invalid SemVer
+      # (e.g. 2.4.0-pre...+ci.github.__run) that the modern NuGet rejects.
+      # Override the metadata with an underscore-free value.
+      NtsBuildMetadata: ci.local
 
     steps:
-    - name: Get source
-      uses: actions/checkout@v5
+    - uses: actions/checkout@v4
       with:
         submodules: recursive
-
-    - name: Setup .NET 10
-      uses: actions/setup-dotnet@v5
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 10
-
-    - name: Restore
-      run: dotnet restore -p:EnableApiCompat=false
-
+        dotnet-version: 10.0.x
+    - name: Restore dependencies
+      # The NetTopologySuite submodule's NuGet.config lists only the dotnet-eng
+      # Azure DevOps feed (which 403s outside Microsoft's network) and pulls the
+      # legacy Microsoft.DotNet.ApiCompat package. Restore from nuget.org and
+      # disable ApiCompat (the modern SDK ships it built-in).
+      run: dotnet restore NetTopologySuite.Curve.sln -p:EnableApiCompat=false --source https://api.nuget.org/v3/index.json
     - name: Build
-      run: dotnet build -c Release --no-restore -p:EnableApiCompat=false
-
+      run: dotnet build NetTopologySuite.Curve.sln --no-restore -p:EnableApiCompat=false
     - name: Test
-      # --blame-hang-timeout surfaces hung tests as failures instead of
-      # letting them block CI forever; some Curve* tests on this branch
-      # are known to hang and need follow-up TAG fixes.
-      run: dotnet test -c Release --no-build -p:EnableApiCompat=false --blame-hang-timeout 120s
+      run: dotnet test test/NetTopologySuite.Curved.Test/NetTopologySuite.Curve.Test.csproj --no-build -p:EnableApiCompat=false --verbosity normal
