@@ -5,6 +5,7 @@ on:
     branches: [ develop ]
   pull_request:
     branches: [ develop ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -12,16 +13,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
       with:
         submodules: recursive
     - name: Setup .NET
-      uses: actions/setup-dotnet@v1
+      uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 5.0.x
+        dotnet-version: 10.0.x
     - name: Restore dependencies
-      run: dotnet restore
+      # The NetTopologySuite submodule's NuGet.config lists only the dotnet-eng
+      # Azure DevOps feed (which 403s outside Microsoft's network) and pulls the
+      # legacy Microsoft.DotNet.ApiCompat package. Restore from nuget.org and
+      # disable ApiCompat (the modern SDK ships it built-in).
+      run: dotnet restore NetTopologySuite.Curve.sln -p:EnableApiCompat=false --source https://api.nuget.org/v3/index.json
     - name: Build
-      run: dotnet build --no-restore
+      run: dotnet build NetTopologySuite.Curve.sln --no-restore -p:EnableApiCompat=false
     - name: Test
-      run: dotnet test --no-build --verbosity normal
+      run: dotnet test test/NetTopologySuite.Curved.Test/NetTopologySuite.Curve.Test.csproj --no-build -p:EnableApiCompat=false --verbosity normal
