@@ -12,6 +12,14 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    env:
+      # The NTS submodule derives its version build-metadata from
+      # ci.github.$(GITHUB_ACTION); GitHub sets GITHUB_ACTION to "__run" for
+      # inline run: steps, and the underscores make an invalid SemVer
+      # (e.g. 2.4.0-pre...+ci.github.__run) that the modern NuGet rejects.
+      # Override the metadata with an underscore-free value.
+      NtsBuildMetadata: ci.local
+
     steps:
     - uses: actions/checkout@v4
       with:
