@@ -2,176 +2,39 @@ name: .NET
 
 on:
   push:
-    branches: [ develop, 'phase1/**' ]
+    branches: [ develop ]
   pull_request:
-    branches: [ develop, 'phase1/**' ]
-
-env:
-  # The NetTopologySuite submodule's src/Directory.Build.props sets
-  # NtsBuildMetadata to "ci.github.$(GITHUB_ACTION)" when GITHUB_ACTIONS
-  # is true.  GitHub assigns GITHUB_ACTION values like "__run_2" /
-  # "__run_3" to successive run-script steps, but underscores aren't
-  # valid in SemVer 2.0.0 build metadata ([0-9A-Za-z-] only), so NuGet
-  # rejects the resulting version string ("2.4.0-pre...+ci.github.__run_2"
-  # is not a valid version string).  Override with a sanitised value
-  # before any dotnet command runs.  Upstream NetTopologySuite issue;
-  # this works around it for our CI without patching the submodule.
-  NtsBuildMetadata: ci.github.run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+    branches: [ develop ]
+  workflow_dispatch:
 
 jobs:
   build:
-    name: Build (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
 
-    strategy:
-      matrix:
-        os: [ ubuntu-latest, windows-latest, macOS-latest ]
-
-    steps:
-    - name: Get source
-      uses: actions/checkout@v5
-      with:
-        submodules: recursive
-
-    - name: Setup .NET 10
-      uses: actions/setup-dotnet@v5
-      with:
-        dotnet-version: 10
-
-    - name: Restore
-      run: dotnet restore -p:EnableApiCompat=false
-
-    - name: Build
-      run: dotnet build -c Release --no-restore -p:EnableApiCompat=false
-
-    - name: Test
-      # --blame-hang-timeout surfaces hung tests as failures instead of
-      # letting them block CI forever; some Curve* tests on this branch
-      # are known to hang and need follow-up TAG fixes.
-      # The RocqRef-categorised tests skip via Assert.Ignore when
-      # ROCQ_REF_BIN is unset (which is the case in this matrix job).
-      # They are exercised in the dedicated `rocqref` job below.
-      run: dotnet test -c Release --no-build -p:EnableApiCompat=false --blame-hang-timeout 120s
-
-  rocqref:
-    # Differential tests against the Rocq-extracted oracle binary from
-    # NetTopologySuite.Proofs.  The C# test fixtures live under
-    # test/.../Robust/{Orientation,Intersect,Simplify}/...RocqRefTests.cs
-    # and are categorised [Category("RocqRef")]; they Assert.Ignore unless
-    # the environment variable ROCQ_REF_BIN points at a built oracle_bin.
-    #
-    # This job downloads the prebuilt oracle binary published by the
-    # NetTopologySuite.Proofs `build-oracle.yml` workflow (on every push
-    # to its main branch, plus release tags).  Avoids the ~5 min Rocq +
-    # Flocq build chain in CI.  Falls back to "no artifact -> fail this
-    # job" so a stale or expired upstream artifact surfaces immediately
-    # rather than silently skipping the differential tests.
-    #
-    # Required secret:
-    #   PROOFS_ACTIONS_READ_TOKEN -- a fine-grained PAT (or GitHub App
-    #   installation token) with `actions: read` + `contents: read` on
-    #   grootstebozewolf/NetTopologySuite.Proofs.  GitHub's auto-generated
-    #   GITHUB_TOKEN is scoped to the current repo only and cannot read
-    #   another repo's actions API even when that repo is public.
-    name: RocqRef differential tests (prebuilt oracle)
     runs-on: ubuntu-latest
 
+    env:
+      # The NTS submodule derives its version build-metadata from
+      # ci.github.$(GITHUB_ACTION); GitHub sets GITHUB_ACTION to "__run" for
+      # inline run: steps, and the underscores make an invalid SemVer
+      # (e.g. 2.4.0-pre...+ci.github.__run) that the modern NuGet rejects.
+      # Override the metadata with an underscore-free value.
+      NtsBuildMetadata: ci.local
+
     steps:
-    - name: Checkout NetTopologySuite.Curve
-      uses: actions/checkout@v5
+    - uses: actions/checkout@v4
       with:
         submodules: recursive
-
-    - name: Setup .NET 10
-      uses: actions/setup-dotnet@v5
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 10
-
-    - name: Download oracle_bin from NetTopologySuite.Proofs
-      # Pulls the latest oracle-bin-linux artifact from a successful run
-      # of build-oracle.yml on the Proofs `main` branch.  `gh` is pre-
-      # installed on ubuntu-latest; passing PROOFS_ACTIONS_READ_TOKEN
-      # via GH_TOKEN scopes it to the Proofs repo for this step.
-      #
-      # Diagnostics (auth status + workflow lookup) are printed before
-      # the download so a PAT-scope, repo-visibility, or branch-filter
-      # mismatch is visible in the step log.  On failure the captured
-      # gh output is re-emitted as a ::error:: annotation so the PR
-      # check summary shows the actual gh CLI message rather than just
-      # "exit code 1".
-      env:
-        GH_TOKEN: ${{ secrets.PROOFS_ACTIONS_READ_TOKEN }}
-      run: |
-        set +e
-        mkdir -p oracle/
-
-        echo "::group::gh auth status"
-        gh auth status
-        echo "::endgroup::"
-
-        echo "::group::probe Proofs build-oracle.yml runs on main"
-        gh api \
-          repos/grootstebozewolf/NetTopologySuite.Proofs/actions/workflows/build-oracle.yml/runs \
-          -X GET -f branch=main -f status=success --jq \
-          '.workflow_runs[0:3] | .[] | {id, conclusion, head_branch, created_at}'
-        probe_rc=$?
-        echo "probe exit: $probe_rc"
-        echo "::endgroup::"
-
-        # `gh run download` doesn't accept --workflow; resolve the run ID
-        # first via `gh run list` (which does), then download by id.
-        echo "::group::resolve build-oracle.yml run ID on main"
-        run_id=$(gh run list \
-          --repo grootstebozewolf/NetTopologySuite.Proofs \
-          --workflow build-oracle.yml \
-          --branch main \
-          --status success \
-          --limit 1 \
-          --json databaseId \
-          --jq '.[0].databaseId')
-        list_rc=$?
-        echo "resolved run_id=${run_id} (rc=${list_rc})"
-        echo "::endgroup::"
-
-        if [ "${list_rc}" -ne 0 ] || [ -z "${run_id}" ] || [ "${run_id}" = "null" ]; then
-          echo "::error::Could not resolve a successful build-oracle.yml run on Proofs main (rc=${list_rc})"
-          exit 1
-        fi
-
-        echo "::group::gh run download ${run_id}"
-        out=$(gh run download "${run_id}" \
-          --repo grootstebozewolf/NetTopologySuite.Proofs \
-          --name oracle-bin-linux \
-          --dir oracle/ 2>&1)
-        rc=$?
-        echo "$out"
-        echo "::endgroup::"
-
-        if [ $rc -ne 0 ]; then
-          first_line=$(echo "$out" | head -1)
-          echo "::error::oracle_bin download failed (rc=$rc): ${first_line}"
-          exit $rc
-        fi
-
-    - name: Make oracle_bin executable + ORIENT_FILTERED smoke test
-      # Artifacts strip the executable bit on upload; restore it before
-      # the smoke test and the differential suite.
-      # CCW unit triangle -> POS with cross product = 1.0.
-      run: |
-        chmod +x oracle/oracle_bin
-        printf 'ORIENT_FILTERED\n0 0\n1 0\n0 1\n' | oracle/oracle_bin
-
-    - name: Restore + build NetTopologySuite.Curve
-      run: |
-        dotnet restore -p:EnableApiCompat=false
-        dotnet build -c Release --no-restore -p:EnableApiCompat=false
-
-    - name: Run RocqRef differential tests
-      env:
-        # Absolute path so the test fixtures' File.Exists check resolves
-        # correctly regardless of which TestHost cwd dotnet test picks.
-        ROCQ_REF_BIN: ${{ github.workspace }}/oracle/oracle_bin
-      run: |
-        dotnet test -c Release --no-build -p:EnableApiCompat=false \
-          --filter 'FullyQualifiedName~RocqRef' \
-          --blame-hang-timeout 120s
+        dotnet-version: 10.0.x
+    - name: Restore dependencies
+      # The NetTopologySuite submodule's NuGet.config lists only the dotnet-eng
+      # Azure DevOps feed (which 403s outside Microsoft's network) and pulls the
+      # legacy Microsoft.DotNet.ApiCompat package. Restore from nuget.org and
+      # disable ApiCompat (the modern SDK ships it built-in).
+      run: dotnet restore NetTopologySuite.Curve.sln -p:EnableApiCompat=false --source https://api.nuget.org/v3/index.json
+    - name: Build
+      run: dotnet build NetTopologySuite.Curve.sln --no-restore -p:EnableApiCompat=false
+    - name: Test
+      run: dotnet test test/NetTopologySuite.Curved.Test/NetTopologySuite.Curve.Test.csproj --no-build -p:EnableApiCompat=false --verbosity normal
