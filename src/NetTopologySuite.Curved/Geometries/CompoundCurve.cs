@@ -334,8 +334,12 @@ namespace NetTopologySuite.Geometries
         /// <inheritdoc cref="Geometry.CopyInternal"/>
         protected override Geometry CopyInternal()
         {
-            var res = new Curve[NumGeometries];
-            for (int i = 0; i < NumGeometries; i++)
+            // NB: NumGeometries is 1 for a CompoundCurve (it is a single Curve,
+            // not a collection); the constituent count is _geometries.Length.
+            // Using NumGeometries here dropped every sub-curve but the first,
+            // producing an unclosed shell when the copy was re-linearized.
+            var res = new Curve[_geometries.Length];
+            for (int i = 0; i < _geometries.Length; i++)
                 res[i] = (Curve)_geometries[i].Copy();
 
             return new CompoundCurve(res, (CurveGeometryFactory)Factory);
