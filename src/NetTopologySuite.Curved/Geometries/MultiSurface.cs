@@ -6,6 +6,7 @@ namespace NetTopologySuite.Geometries
     /// <summary>
     /// A collection of multiple <see cref="Surface{T}"/>s.
     /// </summary>
+    [Serializable]
     public class MultiSurface : GeometryCollection, ILinearizable<MultiPolygon>, IPolygonal
     {
         internal MultiSurface(Geometry[] geometries, CurveGeometryFactory factory)

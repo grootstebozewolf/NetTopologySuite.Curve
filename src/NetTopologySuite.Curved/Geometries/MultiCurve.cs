@@ -5,6 +5,7 @@ namespace NetTopologySuite.Geometries
     /// <summary>
     /// A collection of multiple <see cref="Curve"/> geometries
     /// </summary>
+    [Serializable]
     public class MultiCurve : GeometryCollection, ILinearizable<MultiLineString>, ILineal
     {
         internal MultiCurve(Geometry[] geometries, CurveGeometryFactory factory)
