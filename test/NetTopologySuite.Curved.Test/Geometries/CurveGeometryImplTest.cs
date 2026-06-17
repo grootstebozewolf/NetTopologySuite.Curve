@@ -145,7 +145,10 @@ namespace NetTopologySuite.Test.Geometries
             at = AffineTransformation.TranslationInstance(-100, 0);
             test.Apply(new AffineTransformationFilter1(at));
 
-            Assert.That(test.EqualsExact(geom), Is.True);
+            // A translate-and-translate-back roundtrip is not bit-exact for
+            // non-integer coordinates ((v + 100) - 100 != v in binary64), so
+            // compare within the fixture's length tolerance rather than exactly.
+            Assert.That(test.EqualsExact(geom, LengthTolerance), Is.True);
         }
 
         [Test]
@@ -161,7 +164,10 @@ namespace NetTopologySuite.Test.Geometries
             at = AffineTransformation.TranslationInstance(0, -100);
             test.Apply(new AffineTransformationFilter1(at));
 
-            Assert.That(test.EqualsExact(geom), Is.True);
+            // A translate-and-translate-back roundtrip is not bit-exact for
+            // non-integer coordinates ((v + 100) - 100 != v in binary64), so
+            // compare within the fixture's length tolerance rather than exactly.
+            Assert.That(test.EqualsExact(geom, LengthTolerance), Is.True);
         }
     }
 }

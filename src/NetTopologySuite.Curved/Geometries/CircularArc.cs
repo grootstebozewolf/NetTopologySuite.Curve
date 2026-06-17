@@ -285,8 +285,19 @@ namespace NetTopologySuite.Geometries
                 return res;
             }
 
-            // If p0, p1 and p2 are equal, we have a full circle
-            if (Orientation.Index(p0, p1, p2) == OrientationIndex.Collinear)
+            // The three points are collinear -- exactly, or to within rounding.
+            // The exact Orientation.Index test only catches bit-exact collinearity;
+            // control points that are collinear in intent but not in binary64 (e.g.
+            // 0 0 / 1 2.1082 / 3 6.3246) slip through with a tiny non-zero cross
+            // product, yielding an astronomically large radius.  Flatten would then
+            // iterate ~2*pi / (arcStepLength / radius) times -- effectively forever.
+            // Treat a negligible cross product relative to the chord scale as a line.
+            double ux = p1.X - p0.X, uy = p1.Y - p0.Y;
+            double vx = p2.X - p0.X, vy = p2.Y - p0.Y;
+            double cross = ux * vy - uy * vx;
+            double scale = Math.Sqrt((ux * ux + uy * uy) * (vx * vx + vy * vy));
+            if (Orientation.Index(p0, p1, p2) == OrientationIndex.Collinear
+                || Math.Abs(cross) <= 1e-10 * scale)
             {
                 res.X = p0.X + (p2.X - p0.X) * 0.5d;
                 res.Y = p0.Y + (p2.Y - p0.Y) * 0.5d;
