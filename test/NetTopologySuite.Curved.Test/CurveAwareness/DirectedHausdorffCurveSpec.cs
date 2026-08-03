@@ -6,28 +6,16 @@ using NUnit.Framework;
 namespace NetTopologySuite.Test.CurveAwareness
 {
     /// <summary>
-    /// Red product pin for TAG <c>D-HF</c> (curve-aware discrete / directed
-    /// Hausdorff) — JTS epic #1195 Phase 3, proofs epic #423.
+    /// Green pin for TAG <c>D-HF</c> (curve-aware discrete / directed Hausdorff)
+    /// — JTS epic #1195 Phase 3, proofs #423.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// JTS companion: <c>CurveAwarenessSpecTest.test_D_HF_hausdorffFrechetCurveAware</c>
-    /// on <c>feature/sfa-curve-rgr</c>. Same asymmetric-arc witness: control-point
-    /// discrete Hausdorff under-estimates the continuous directed max-min because
-    /// densify walks the control chords, not the arc.
-    /// </para>
-    /// <para>
-    /// Continuous apex of the circle through (0,0), (2,3), (10,0) relative to the
-    /// x-axis baseline is ≈ 3.96764 (centre (5, −7/6), r ≈ 5.134). Control-only
-    /// and chord-fraction densify both land near the mid control height 3.
-    /// </para>
-    /// <para>
-    /// Spec (delete-on-green for the intentional red assertion): densify / sample
-    /// by arc length so discrete h(A,B) approaches the continuous directed
-    /// Hausdorff. NTS already has <see cref="DiscreteHausdorffDistance"/> with
-    /// <see cref="DiscreteHausdorffDistance.OrientedDistance()"/>; the curve-aware
-    /// path is the gap. <c>DirectedHausdorffDistance</c> (JTS 1.21 / NTS#812) is
-    /// the longer-term continuous-style port — same witness applies.
+    /// Witness: asymmetric <c>CIRCULARSTRING (0 0, 2 3, 10 0)</c> vs baseline
+    /// <c>LINESTRING (0 0, 10 0)</c>. Continuous directed Hausdorff (apex of the
+    /// circle above the x-axis) is ≈ 3.96764. Control-point discrete densify
+    /// under-estimates at mid-control height 3; arc-length densify via
+    /// <see cref="CurveDiscreteHausdorffDistance"/> approaches continuous.
     /// </para>
     /// </remarks>
     [TestFixture]
@@ -59,9 +47,7 @@ namespace NetTopologySuite.Test.CurveAwareness
         private Geometry Read(string wkt) => _services.WKTReader.Read(wkt);
 
         /// <summary>
-        /// D-HF: oriented discrete Hausdorff on an asymmetric CircularString must
-        /// approach the continuous arc apex by sampling along arc length, not by
-        /// walking control points / control-chord fractions alone.
+        /// D-HF Green: arc-length densify approaches continuous directed Hausdorff.
         /// </summary>
         [Test]
         public void D_HF_orientedHausdorff_samplesArcNotControlChords()
@@ -73,9 +59,9 @@ namespace NetTopologySuite.Test.CurveAwareness
                 "D-HF: reader must keep CircularString identity");
 
             var cs = (CircularString)arc;
-            // Control-point polyline (what DiscreteHausdorff sees if it only walks
-            // CircularString.ControlPoints / inherited coordinate sequence without
-            // arc-length densify). Mid control (2,3) → height 3 on the baseline.
+
+            // Control-point polyline: what core DiscreteHausdorff sees without
+            // arc-length densify. Mid control (2,3) → height 3 on the baseline.
             var controlCoords = new Coordinate[cs.ControlPoints.Count];
             for (int i = 0; i < controlCoords.Length; i++)
                 controlCoords[i] = cs.ControlPoints.GetCoordinate(i).Copy();
@@ -89,25 +75,37 @@ namespace NetTopologySuite.Test.CurveAwareness
                 DensifyFraction = 0.05
             }.OrientedDistance();
 
-            // What Linearize() already gives: dense chord approximation of the arc.
-            // D-HF is red because DiscreteHausdorffDistance has no arc-length densify
-            // parameter on the curve itself — callers must Linearize first, and the
-            // densify fraction still walks polyline chords of whatever was linearized.
-            double linearizedDist = new DiscreteHausdorffDistance(cs.Linearize(), baseline)
-                .OrientedDistance();
+            // Product path: densify each arc by equal arc-length steps.
+            double curveAwareDist = CurveDiscreteHausdorffDistance.OrientedDistance(
+                cs, baseline, densifyFraction: 0.05);
 
-            // Red ratchet: the control-point discrete reading must match continuous h.
-            // Today control-only ≈ 3 and chord densify on controls cannot exceed 3
-            // (chords lie inside the arc). Linearize() may approach ExpectedContinuous
-            // as a workaround, but that is densify-via-flatten, not D-HF arc sampling.
-            Assert.That(controlOnlyDist, Is.EqualTo(ExpectedContinuous).Within(Tol),
-                "D-HF: oriented DiscreteHausdorffDistance on CIRCULARSTRING(0 0, 2 3, 10 0) "
-                + "vs LINESTRING(0 0, 10 0) should approach continuous h≈" + ExpectedContinuous
-                + " by sampling along arc length without forcing Linearize(); "
-                + "control-only got " + controlOnlyDist
-                + ", control-chord densify(frac=0.05) got " + controlChordDensifyDist
-                + ", Linearize() workaround got " + linearizedDist
-                + " (control path ≈ mid-control height 3 — densify walks control chords, not the arc).");
+            Assert.That(controlOnlyDist, Is.EqualTo(3.0).Within(1e-9),
+                "control-only discrete should stay at mid-control height 3 (regression of the gap)");
+            Assert.That(controlChordDensifyDist, Is.EqualTo(3.0).Within(1e-9),
+                "control-chord densify cannot exceed mid-control height (chords inside the arc)");
+
+            Assert.That(curveAwareDist, Is.EqualTo(ExpectedContinuous).Within(Tol),
+                "D-HF: CurveDiscreteHausdorffDistance arc-length densify on "
+                + "CIRCULARSTRING(0 0, 2 3, 10 0) vs LINESTRING(0 0, 10 0) should approach "
+                + "continuous h≈" + ExpectedContinuous + "; got " + curveAwareDist
+                + " (control-only=" + controlOnlyDist
+                + ", control-chord densify=" + controlChordDensifyDist + ")");
+        }
+
+        /// <summary>
+        /// Default densify fraction (0.05) matches the explicit 0.05 path on the witness.
+        /// </summary>
+        [Test]
+        public void D_HF_defaultDensifyFraction_matchesExplicit()
+        {
+            var cs = (CircularString)Read("CIRCULARSTRING (0 0, 2 3, 10 0)");
+            var baseline = Read("LINESTRING (0 0, 10 0)");
+
+            double withDefault = CurveDiscreteHausdorffDistance.OrientedDistance(cs, baseline);
+            double withExplicit = CurveDiscreteHausdorffDistance.OrientedDistance(cs, baseline, 0.05);
+
+            Assert.That(withDefault, Is.EqualTo(withExplicit).Within(1e-12));
+            Assert.That(withDefault, Is.EqualTo(ExpectedContinuous).Within(Tol));
         }
     }
 }
