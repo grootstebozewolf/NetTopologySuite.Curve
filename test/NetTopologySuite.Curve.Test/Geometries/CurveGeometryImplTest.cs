@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using System.Runtime.Serialization.Formatters.Binary;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.Geometries.Implementation;
@@ -74,7 +75,12 @@ namespace NetTopologySuite.Test.Geometries
             var old = NtsGeometryServices.Instance;
 
             NtsGeometryServices.Instance = Instance;
+            // don't use BinaryFormatter in production. read this instead:
+            // https://learn.microsoft.com/en-us/dotnet/standard/serialization/binaryformatter-migration-guide
+#pragma warning disable SYSLIB0011 // Type or member is obsolete
+            AppContext.SetSwitch("System.Runtime.Serialization.EnableUnsafeBinaryFormatterSerialization", true);
             var bf = new BinaryFormatter();
+#pragma warning restore SYSLIB0011 // Type or member is obsolete
             using (var ms = new MemoryStream())
             {
                 bf.Serialize(ms, geom1);
