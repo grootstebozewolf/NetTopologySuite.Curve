@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.IO;
 
@@ -13,8 +13,9 @@ namespace NetTopologySuite
         /// Creates a new instance of this class using the provided arguments.
         /// </summary>
         /// <remarks>
-        /// The <see cref="GeometryOverlay"/> argument from <see cref="NtsCurveGeometryServices"/> constructor is set internally to
-        /// <see cref="CurveGeometryOverlay.CurveV2"/>.
+        /// The <see cref="GeometryOverlay"/> argument is set to
+        /// <see cref="CurveGeometryOverlay.OverlayNGCurve"/> (curve flatten +
+        /// self-op algebra shortcuts; see guardrails G1–G5).
         /// </remarks>
         /// <param name="coordinateSequenceFactory">A coordinate sequence factory</param>
         /// <param name="precisionModel">A precision model</param>
@@ -24,7 +25,7 @@ namespace NetTopologySuite
         public NtsCurveGeometryServices(CoordinateSequenceFactory coordinateSequenceFactory,
             PrecisionModel precisionModel, int srid, 
             CoordinateEqualityComparer coordinateEqualityComparer, double defaultArcSegmentLength)
-            : base(coordinateSequenceFactory, precisionModel, srid, CurveGeometryOverlay.CurveV2, coordinateEqualityComparer,
+            : base(coordinateSequenceFactory, precisionModel, srid, CurveGeometryOverlay.OverlayNGCurve, coordinateEqualityComparer,
                 t => new WKTReaderEx((NtsCurveGeometryServices)t), t => new WKTWriterEx(3),
                 t => new WKBReaderEx((NtsCurveGeometryServices)t), t => new WKBWriterEx())
         {
